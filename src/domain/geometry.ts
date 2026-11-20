@@ -71,12 +71,20 @@ export function computeFitView(
   cards: Card[],
   viewportW: number,
   viewportH: number,
-  insets: { side: number; top: number; bottom: number }
+  insetsInput: number | { side: number; top: number; bottom: number } = {
+    side: 48,
+    top: 84,
+    bottom: 92,
+  }
 ): ProjectView {
   const bounds = computeCardsBounds(cards);
   if (!bounds || viewportW <= 0 || viewportH <= 0) {
     return { x: Math.round(viewportW * 0.12), y: Math.round(viewportH * 0.14), zoom: 1 };
   }
+  const insets =
+    typeof insetsInput === 'number'
+      ? { side: insetsInput, top: insetsInput + 36, bottom: insetsInput + 44 }
+      : insetsInput;
   const availW = Math.max(1, viewportW - insets.side * 2);
   const availH = Math.max(1, viewportH - insets.top - insets.bottom);
 

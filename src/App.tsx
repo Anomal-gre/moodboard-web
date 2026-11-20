@@ -1040,11 +1040,22 @@ export const App: React.FC = () => {
       if (!activeProject) return;
       const arranged = computeArrangedCards(activeProject.cards, selectedIds, opts);
       setArrangePreviewCards(null);
-      mutateProject(activeProject.id, (p) => ({ ...p, cards: arranged }), {
-        recordUndo: true,
-      });
+      const nextView =
+        selectedIds.length === 0
+          ? computeFitView(
+              arranged.filter((c) => !c.inbox),
+              viewportSize.width,
+              viewportSize.height,
+              54
+            )
+          : activeProject.view;
+      mutateProject(
+        activeProject.id,
+        (p) => ({ ...p, cards: arranged, view: nextView }),
+        { recordUndo: true }
+      );
     },
-    [activeProject, mutateProject, selectedIds]
+    [activeProject, mutateProject, selectedIds, viewportSize.height, viewportSize.width]
   );
 
   // AI Classification Apply (W17: respects projectId, deleted/replaced/manually-changed cards)

@@ -33,13 +33,33 @@ function getAspectRatio(card: Card): number {
   return 1.33;
 }
 
-function sizeImageByWidth(card: Card, targetW: number, minH = 120, maxH = 480): { w: number; h: number } {
+function sizeImageByWidth(
+  card: Card,
+  targetW: number,
+  minH = 130,
+  maxH = 460
+): { w: number; h: number } {
   const aspect = getAspectRatio(card);
   const rawH = Math.round(targetW / aspect);
   return {
     w: Math.round(targetW),
     h: Math.max(minH, Math.min(maxH, rawH)),
   };
+}
+
+function estimateEditorialCardHeight(card: Card, targetW: number): number {
+  if (card.kind === 'file') return 88;
+  if (card.kind === 'link') return 112;
+  // Estimate wrapped line count for note cards so text is never clipped
+  const charsPerLine = Math.max(22, Math.floor((targetW - 36) / 7.2));
+  const rawLines = (card.text || '').split('\n');
+  let totalLines = 0;
+  for (const line of rawLines) {
+    totalLines += Math.max(1, Math.ceil(line.length / charsPerLine));
+  }
+  const titleLines = card.title ? Math.ceil(card.title.length / (charsPerLine - 2)) : 0;
+  const computed = 42 + titleLines * 22 + totalLines * 20;
+  return Math.max(136, Math.min(280, Math.max(card.h, computed)));
 }
 
 function parseHexLuminance(hex?: string): number {
@@ -83,26 +103,33 @@ function normalizeBox(items: PlacedCardPatch[]): CompositionBox {
 
 /**
  * Separates cards into semantic designer roles:
- * - visualImages: all image cards sorted by compositional priority (reference -> furniture -> sketch -> material -> palette -> other)
- * - swatches: all color swatch cards sorted by luminance (dark -> light or warm progression)
- * - editorials: notes, files, links (never buried inside photo overlaps; placed in perimeter callout/header zones)
+ * - Heroes: primary space/architecture anchor(s)
+ * - Supports: furniture, floor plans, secondary visuals
+ * - Accents: tactile materials & palette detail photos
+ * - Swatches: color swatch cards sorted by luminance
+ * - Editorials: notes first (concept headers), then links & DWG design files
  */
 function partitionByDesignerRole(cards: Card[]) {
   const images = cards.filter((c) => c.kind === 'image');
   const swatches = [...cards.filter((c) => c.kind === 'color')].sort(
     (a, b) => parseHexLuminance(a.color) - parseHexLuminance(b.color) || a.id.localeCompare(b.id)
   );
-  const editorials = cards.filter(
+  const kindOrder: Record<string, number> = { note: 1, link: 2, file: 3 };
+  const editorials = [...cards.filter(
     (c) => c.kind === 'note' || c.kind === 'file' || c.kind === 'link'
+  )].sort(
+    (a, b) =>
+      (kindOrder[a.kind] ?? 9) - (kindOrder[b.kind] ?? 9) ||
+      b.text.length - a.text.length ||
+      a.id.localeCompare(b.id)
   );
 
-  // Pick Hero Anchor(s): prefer 'reference' category or largest area image
   const rolePriority: Record<Category, number> = {
     reference: 1,
     furniture: 2,
     sketch: 3,
-    material: 4,
-    palette: 5,
+    palette: 4,
+    material: 5,
     other: 6,
   };
 
@@ -118,17 +145,16 @@ function partitionByDesignerRole(cards: Card[]) {
   const accents: Card[] = [];
 
   sortedImages.forEach((img, idx) => {
-    if (idx === 0 || (img.category === 'reference' && heroes.length < Math.ceil(sortedImages.length / 6))) {
+    if (idx === 0) {
       heroes.push(img);
-    } else if (img.category === 'material' || img.category === 'palette') {
+    } else if (img.category === 'material') {
       accents.push(img);
     } else {
       supports.push(img);
     }
   });
 
-  // If no explicit accents exist and we have >= 4 images, promote the last image as a focal accent overlay
-  if (accents.length === 0 && supports.length >= 3) {
+  if (accents.length === 0 && supports.length >= 4) {
     const promoted = supports.pop();
     if (promoted) accents.push(promoted);
   }
@@ -138,47 +164,44 @@ function partitionByDesignerRole(cards: Card[]) {
 
 /**
  * MODE 1: EDITORIAL BENTO (Inspired by Pinterest References #3, #6, #8)
- * - Tightly aligned central mosaic block (2 main columns + interlocking rows).
- * - Accent/Material images sit as crisp white-framed focal cards directly over the seam intersections!
+ * - Tightly aligned 2-column central mosaic block where all 4 quadrants fill evenly.
+ * - At most 1 focal accent card per 4 base images sits as a crisp white-framed card over the 4-way seam intersection!
  * - Color swatches form a unified horizontal palette bar docked across the bottom edge of the mosaic.
- * - Notes / DWG files sit in clean Left & Right perimeter callout margins flanking the mosaic.
+ * - Notes / DWG files sit in clean Left & Right perimeter callout margins with full unclipped height.
  */
 function layoutEditorialBento(
   cards: Card[],
   options: ArrangeOptions,
   baseZ: number
 ): CompositionBox {
-  const { heroes, supports, accents, swatches, editorials } = partitionByDesignerRole(cards);
+  const { heroes, supports, accents, swatches, editorials, allImages } =
+    partitionByDesignerRole(cards);
   const t = Math.max(0, Math.min(1, options.overlap / 100));
   const useFrame = options.galleryFrame ?? true;
-  // Seam gap shrinks from 14px (clean grid) down to 2px (tight magazine mosaic) as slider increases
-  const seam = Math.round(14 * (1 - t * 0.75));
+  const seam = Math.round(14 * (1 - t * 0.72));
   const items: PlacedCardPatch[] = [];
   let z = baseZ;
 
-  const leftColW = 460;
-  const rightColW = 340;
+  const leftColW = 456;
+  const rightColW = 348;
   const mosaicW = leftColW + seam + rightColW;
+
+  // Keep enough images in the base mosaic so both columns have at least 2 rows before floating an overlay
+  const maxOverlays =
+    allImages.length >= 5 && t >= 0.15 ? Math.min(accents.length, Math.floor((allImages.length - 3) / 2)) : 0;
+  const overlayAccents = accents.slice(0, Math.max(0, maxOverlays));
+  const inlineAccents = accents.slice(overlayAccents.length);
+  const bentoPool = [...heroes, ...supports, ...inlineAccents];
 
   let leftY = 0;
   let rightY = 0;
-  const seamIntersections: Array<{ x: number; y: number }> = [];
-
-  // 1. Place Hero card(s) & Supporting cards into the 2-column Bento core
-  const coreImages = [...heroes, ...supports];
-  // If we have very few core images, include accents in core except 1 focal overlay
-  const overlayAccents =
-    coreImages.length >= 3 && t >= 0.15
-      ? accents.slice(0, Math.max(1, Math.min(2, accents.length)))
-      : [];
-  const inlineAccents = accents.slice(overlayAccents.length);
-  const bentoPool = [...coreImages, ...inlineAccents];
+  const leftSplitY: number[] = [];
+  const rightSplitY: number[] = [];
 
   bentoPool.forEach((img, idx) => {
     const placeLeft = idx === 0 || leftY <= rightY;
     if (placeLeft) {
-      // Check if we can split left column into 2 side-by-side sub-cells for variety on row 2+
-      const { h } = sizeImageByWidth(img, leftColW, 190, 380);
+      const { h } = sizeImageByWidth(img, leftColW, 200, 360);
       items.push({
         id: img.id,
         x: 0,
@@ -188,10 +211,11 @@ function layoutEditorialBento(
         z: ++z,
         framed: false,
       });
-      seamIntersections.push({ x: leftColW, y: leftY + h });
-      leftY += h + seam;
+      leftY += h;
+      leftSplitY.push(leftY);
+      leftY += seam;
     } else {
-      const { h } = sizeImageByWidth(img, rightColW, 175, 360);
+      const { h } = sizeImageByWidth(img, rightColW, 190, 350);
       items.push({
         id: img.id,
         x: leftColW + seam,
@@ -201,38 +225,47 @@ function layoutEditorialBento(
         z: ++z,
         framed: false,
       });
-      seamIntersections.push({ x: leftColW, y: rightY + h });
-      rightY += h + seam;
+      rightY += h;
+      rightSplitY.push(rightY);
+      rightY += seam;
     }
   });
 
-  // Balance bottom edge of the 2 Bento columns when both columns have cards
+  // Equalize bottom edge of left and right columns so the Bento outer rectangle is razor-sharp!
   const leftItems = items.filter((it) => it.x === 0);
   const rightItems = items.filter((it) => it.x > 0);
   if (leftItems.length > 0 && rightItems.length > 0) {
-    const maxColH = Math.max(leftY - seam, rightY - seam);
+    const targetH = Math.max(leftY - seam, rightY - seam);
     const lastLeft = leftItems[leftItems.length - 1];
     const lastRight = rightItems[rightItems.length - 1];
-    const leftDiff = maxColH - (lastLeft.y + lastLeft.h);
-    const rightDiff = maxColH - (lastRight.y + lastRight.h);
-    if (leftDiff > 0 && leftDiff < 140) lastLeft.h += leftDiff;
-    if (rightDiff > 0 && rightDiff < 140) lastRight.h += rightDiff;
+    const leftDiff = targetH - (lastLeft.y + lastLeft.h);
+    const rightDiff = targetH - (lastRight.y + lastRight.h);
+    if (leftDiff > 0 && leftDiff <= 180) lastLeft.h += leftDiff;
+    if (rightDiff > 0 && rightDiff <= 180) lastRight.h += rightDiff;
   }
 
-  const mosaicH = Math.max(leftY, rightY, 240) - (bentoPool.length > 0 ? seam : 0);
+  const mosaicH =
+    leftItems.length > 0 && rightItems.length > 0
+      ? Math.max(
+          leftItems[leftItems.length - 1].y + leftItems[leftItems.length - 1].h,
+          rightItems[rightItems.length - 1].y + rightItems[rightItems.length - 1].h
+        )
+      : Math.max(leftY, rightY, 240) - (bentoPool.length > 0 ? seam : 0);
 
-  // 2. Signature Designer Touch (Image #8): White-framed Focal Accent card(s) sitting on Seam Intersections!
+  // Place white-framed Focal Accent card(s) at distinct 4-way seam intersections (Image #8 style)
   overlayAccents.forEach((acc, idx) => {
-    const anchor = seamIntersections[idx] ?? {
-      x: leftColW,
-      y: Math.round(mosaicH * (0.38 + idx * 0.3)),
-    };
-    const boxW = Math.round(186 + 28 * t);
-    const { w, h } = sizeImageByWidth(acc, boxW, 160, 230);
+    const seamY =
+      idx === 0
+        ? Math.round(((leftSplitY[0] ?? mosaicH * 0.5) + (rightSplitY[0] ?? mosaicH * 0.5)) / 2)
+        : Math.round(
+            ((leftSplitY[idx] ?? mosaicH * 0.72) + (rightSplitY[idx] ?? mosaicH * 0.72)) / 2
+          );
+    const boxW = Math.round(176 + 26 * t);
+    const { w, h } = sizeImageByWidth(acc, boxW, 156, 210);
     items.push({
       id: acc.id,
-      x: Math.round(anchor.x - w * 0.52),
-      y: Math.round(anchor.y - h * 0.5),
+      x: Math.round(leftColW + seam / 2 - w * 0.5),
+      y: Math.round(seamY - h * 0.5),
       w,
       h,
       z: baseZ + 40 + idx,
@@ -240,18 +273,16 @@ function layoutEditorialBento(
     });
   });
 
-  // 3. Bottom Color Palette Dock (Images #3, #6, #8: sleek horizontal row of vertical swatch bars)
-  let bottomCursorY = mosaicH;
+  // Bottom Color Palette Dock (Images #3, #6, #8)
   if (swatches.length > 0) {
     const nSw = swatches.length;
     const swGap = 12;
-    const totalBarW = Math.min(mosaicW, Math.max(420, nSw * 142));
-    const swW = Math.max(96, Math.min(168, Math.floor((totalBarW - swGap * (nSw - 1)) / nSw)));
-    const swH = 112;
+    const totalBarW = Math.min(mosaicW, Math.max(430, nSw * 148));
+    const swW = Math.max(100, Math.min(172, Math.floor((totalBarW - swGap * (nSw - 1)) / nSw)));
+    const swH = 110;
     const actualRowW = nSw * swW + (nSw - 1) * swGap;
     const startX = Math.round((mosaicW - actualRowW) / 2);
-    // At higher overlap slider, the swatch bar kisses/overlaps the bottom 22px of the mosaic just like Image #8!
-    const overlapUp = Math.round(24 * t);
+    const overlapUp = Math.round(20 * t);
     const swY = mosaicH + 16 - overlapUp;
 
     swatches.forEach((sw, idx) => {
@@ -265,19 +296,17 @@ function layoutEditorialBento(
         framed: false,
       });
     });
-    bottomCursorY = swY + swH;
   }
 
-  // 4. Perimeter Callout Margins for Notes, DWG Files & Links (Images #3, #7, #8)
-  const marginGap = 36;
-  const noteW = 264;
-  let leftMarginY = 12;
-  let rightMarginY = 12;
+  // Left & Right Perimeter Callout Margins for Concept Notes & DWG Files (never clipping text!)
+  const marginGap = 34;
+  const noteW = 282;
+  let leftMarginY = 4;
+  let rightMarginY = 4;
 
   editorials.forEach((ed, idx) => {
-    const h = ed.kind === 'file' ? 86 : ed.kind === 'link' ? 108 : Math.max(136, Math.min(210, ed.h));
+    const h = estimateEditorialCardHeight(ed, noteW);
     if (idx % 2 === 0) {
-      // Left margin callout
       items.push({
         id: ed.id,
         x: -(noteW + marginGap),
@@ -286,9 +315,8 @@ function layoutEditorialBento(
         h,
         z: baseZ + 50 + idx,
       });
-      leftMarginY += h + 24;
+      leftMarginY += h + 22;
     } else {
-      // Right margin callout
       items.push({
         id: ed.id,
         x: mosaicW + marginGap,
@@ -297,20 +325,19 @@ function layoutEditorialBento(
         h,
         z: baseZ + 50 + idx,
       });
-      rightMarginY += h + 24;
+      rightMarginY += h + 22;
     }
   });
 
-  void bottomCursorY;
   return normalizeBox(items);
 }
 
 /**
  * MODE 2: LAYERED FOCAL COLLAGE / SCRAPBOOK (Inspired by Pinterest References #2, #4, #5)
- * - Strong 3-tier scale hierarchy: 1 Commanding Hero Anchor -> Medium Supporting cards anchored to Hero's corners -> Compact Accent cards tucked into seams.
- * - Corner-Only Overlap invariant: overlapping cards NEVER cover the inner 65% focal core of the card beneath!
- * - Swatches form a sleek vertical Palette Rail hugging the right edge of the island (Images #2 & #4).
- * - Notes & files sit in the Top-Left Editorial Header & Bottom-Left Spec zones (Image #5 STUDIO NEBULA).
+ * - 1 Commanding Hero Anchor in the center-left.
+ * - Supporting & Accent photos interlock at distinct corner/edge slots around the Hero without colliding with one another!
+ * - Swatches form a sleek vertical Palette Rail on the right flank.
+ * - Primary Concept Note sits at the Top-Left Editorial Header slot (Image #5 STUDIO NEBULA), while DWG files & extra notes sit cleanly in the bottom spec bar.
  */
 function layoutFocalCollage(
   cards: Card[],
@@ -324,14 +351,13 @@ function layoutFocalCollage(
 
   const allVisuals = [...heroes, ...supports, ...accents];
   if (allVisuals.length === 0) {
-    // Only notes/swatches exist
     return layoutEditorialBento(cards, options, baseZ);
   }
 
-  // Tier 1: Primary Hero Anchor
+  // Tier 1: Commanding Hero Anchor
   const hero = allVisuals[0];
-  const heroW = Math.round(440 + 80 * t); // 440..520px
-  const heroSize = sizeImageByWidth(hero, heroW, 280, 420);
+  const heroW = Math.round(450 + 70 * t); // 450..520px
+  const heroSize = sizeImageByWidth(hero, heroW, 290, 410);
   const heroRect: Rect = { x: 0, y: 0, w: heroSize.w, h: heroSize.h };
 
   items.push({
@@ -344,58 +370,49 @@ function layoutFocalCollage(
     framed: false,
   });
 
-  // Inset factor controls how far supporting cards step over the Hero's outer corner (from -18px gap to +24% corner overlap)
-  const insetRatio = -0.05 + 0.27 * t; // -5% (gap) at t=0 -> +22% corner overlap at t=1
-
-  // Tier 2 & 3 slots around the Hero perimeter (Pinwheel / Spiral focal island)
+  // Corner inset depth (0..72px overlap onto Hero's corners)
+  const insetPx = Math.round(-16 + 84 * t);
   const remainingVisuals = [...supports, ...heroes.slice(1), ...accents];
 
-  remainingVisuals.forEach((card, idx) => {
-    const isAccent = card.category === 'material' || card.category === 'palette' || idx >= 4;
-    const targetW = isAccent
-      ? Math.round(215 - 20 * t) // Compact tactile square/detail (195..215px)
-      : Math.round(285 - 15 * t); // Medium supporting card (270..285px)
-    const { w, h } = sizeImageByWidth(card, targetW, 145, 340);
+  // Track placed satellite rects so satellites never pile on top of each other's labels
+  let rightTopBottomY = 0;
 
-    const insetX = Math.round(Math.min(w, heroRect.w) * insetRatio);
-    const insetY = Math.round(Math.min(h, heroRect.h) * insetRatio);
+  remainingVisuals.forEach((card, idx) => {
+    const isAccent = card.category === 'material' || card.category === 'palette' || idx >= 3;
+    const targetW = isAccent ? Math.round(216 - 14 * t) : Math.round(284 - 12 * t);
+    const { w, h } = sizeImageByWidth(card, targetW, 148, 320);
 
     let x = 0;
     let y = 0;
-    const slot = idx % 6;
+    const slot = idx % 5;
 
     switch (slot) {
       case 0:
-        // Bottom-Right Corner of Hero (Classic armchair-over-living-room overlap!)
-        x = heroRect.x + heroRect.w - insetX;
-        y = heroRect.y + heroRect.h - Math.round(h * 0.72);
+        // Slot 0: Bottom-Right Corner of Hero (Armchair)
+        x = heroRect.x + heroRect.w - insetPx;
+        y = heroRect.y + heroRect.h - Math.round(h * 0.58);
         break;
       case 1:
-        // Top-Right Shoulder of Hero
-        x = heroRect.x + heroRect.w - Math.round(insetX * 0.7) + 14;
-        y = heroRect.y - Math.round(h * 0.18);
+        // Slot 1: Top-Right Shoulder of Hero (placed cleanly above Slot 0!)
+        x = heroRect.x + heroRect.w - Math.round(insetPx * 0.65) + 18;
+        y = heroRect.y - Math.round(h * 0.25);
+        rightTopBottomY = y + h;
         break;
       case 2:
-        // Bottom-Left Base beneath Hero
-        x = heroRect.x + Math.round(heroRect.w * 0.08);
-        y = heroRect.y + heroRect.h - insetY;
+        // Slot 2: Bottom-Left Corner below Hero (Material texture)
+        x = heroRect.x + 24;
+        y = heroRect.y + heroRect.h - Math.round(insetPx * 0.75);
         break;
       case 3:
-        // Far Right Lower Counterweight (interlocking with slot 0 & slot 1)
-        x = heroRect.x + heroRect.w + Math.round(w * 0.78) - insetX;
-        y = heroRect.y + Math.round(heroRect.h * 0.24);
-        break;
-      case 4:
-        // Left Flank of Hero
-        x = heroRect.x - w + insetX;
-        y = heroRect.y + Math.round(heroRect.h * 0.28);
+        // Slot 3: Far-Right Wing (Paint swatches — placed to the right of Slot 1/0, never covering Floor Plan label!)
+        x = heroRect.x + heroRect.w + 260 - Math.round(insetPx * 0.45);
+        y = Math.max(heroRect.y + 24, rightTopBottomY - Math.round(h * 0.35));
         break;
       default: {
-        // Extended island rows for 7+ images
-        const extraRow = Math.floor(idx / 6);
-        const col = idx % 3;
-        x = heroRect.x + col * (w + 18);
-        y = heroRect.y + heroRect.h + 180 + (extraRow - 1) * (h + 20);
+        const extraCol = (idx - 4) % 3;
+        const extraRow = Math.floor((idx - 4) / 3);
+        x = heroRect.x + extraCol * (w + 22);
+        y = heroRect.y + heroRect.h + 210 + extraRow * (h + 22);
         break;
       }
     }
@@ -406,14 +423,11 @@ function layoutFocalCollage(
       y: Math.round(y),
       w,
       h,
-      z: isAccent ? baseZ + 30 + idx : baseZ + 12 + idx,
+      z: isAccent ? baseZ + 26 + idx : baseZ + 12 + idx,
       framed: useFrame,
     });
   });
 
-  // Compute current photo island bounds so we can dock the Swatch Rail & Editorial Headers cleanly
-  const photoBox = normalizeBox(items);
-  // Keep original coordinates before final normalization
   let islandMinX = Infinity;
   let islandMinY = Infinity;
   let islandMaxX = -Infinity;
@@ -424,16 +438,17 @@ function layoutFocalCollage(
     islandMaxX = Math.max(islandMaxX, it.x + it.w);
     islandMaxY = Math.max(islandMaxY, it.y + it.h);
   }
-  void photoBox;
 
   // Vertical Color Palette Rail hugging the Right Flank (Images #2 & #4)
   if (swatches.length > 0) {
-    const railX = Math.round(islandMaxX + 24);
+    const railX = Math.round(islandMaxX + 26);
     const swW = 148;
     const swH = 88;
     const swGap = 10;
     const totalRailH = swatches.length * swH + (swatches.length - 1) * swGap;
-    const startY = Math.round(islandMinY + Math.max(0, (islandMaxY - islandMinY - totalRailH) / 2));
+    const startY = Math.round(
+      islandMinY + Math.max(0, (islandMaxY - islandMinY - totalRailH) / 2)
+    );
 
     swatches.forEach((sw, idx) => {
       items.push({
@@ -448,39 +463,33 @@ function layoutFocalCollage(
     islandMaxX = railX + swW;
   }
 
-  // Editorial Intro & Technical Specs (Image #5 STUDIO NEBULA: Top-Left Manifest + Bottom-Left/Right Notes)
+  // Editorial Header (Primary Concept Note at Top-Left above Hero, remaining Notes & DWG below)
+  let bottomNoteX = heroRect.x + 260;
+  const bottomNoteY = Math.round(islandMaxY - 70);
+
   editorials.forEach((ed, idx) => {
-    const w = ed.kind === 'file' ? 284 : 296;
-    const h = ed.kind === 'file' ? 84 : ed.kind === 'link' ? 108 : Math.max(142, Math.min(196, ed.h));
-    if (idx === 0) {
-      // Top-Left Editorial Header above Hero
+    const w = ed.kind === 'file' ? 288 : 310;
+    const h = estimateEditorialCardHeight(ed, w);
+    if (idx === 0 && ed.kind === 'note') {
+      // Top-Left Editorial Manifest above Hero (Image #5 STUDIO NEBULA)
       items.push({
         id: ed.id,
         x: heroRect.x,
-        y: islandMinY - h - 24,
-        w: Math.max(w, 330),
-        h,
+        y: Math.round(heroRect.y - h - 22),
+        w: 340,
+        h: estimateEditorialCardHeight(ed, 340),
         z: baseZ + 60,
-      });
-    } else if (idx === 1) {
-      // Bottom-Right or Bottom-Left Spec Slot
-      items.push({
-        id: ed.id,
-        x: Math.round(islandMaxX - w),
-        y: Math.round(islandMaxY + 24),
-        w,
-        h,
-        z: baseZ + 61,
       });
     } else {
       items.push({
         id: ed.id,
-        x: Math.round(islandMinX + ((idx - 2) % 3) * (w + 20)),
-        y: Math.round(islandMaxY + 24 + Math.floor((idx - 2) / 3) * (h + 18)),
+        x: Math.round(bottomNoteX),
+        y: bottomNoteY,
         w,
         h,
         z: baseZ + 60 + idx,
       });
+      bottomNoteX += w + 22;
     }
   });
 
@@ -489,9 +498,6 @@ function layoutFocalCollage(
 
 /**
  * MODE 3: CONCEPT ZONES / PRESENTATION SPREAD (Inspired by Pinterest References #1 & #7)
- * - Groups cards into thematic zones (Space, Furniture, Palette, Material, Floor Plan/Sketch, Notes).
- * - Within each zone, cards are arranged in a diagonal magazine staircase/cascade overlap (Image #1 PHOTOS / TEXTURE / GRAPHICS) rather than a flat list!
- * - Swatches form a compact 2-column pigment mosaic inside the Palette zone.
  */
 function layoutConceptZones(
   cards: Card[],
@@ -511,7 +517,6 @@ function layoutConceptZones(
     const swatches = catCards.filter((c) => c.kind === 'color');
     const nonSwatches = catCards.filter((c) => c.kind !== 'color');
 
-    // Arrange photos/notes in a diagonal staggered cascade within the zone
     let cursorY = 0;
     nonSwatches.forEach((c, idx) => {
       if (c.kind === 'image') {
@@ -523,7 +528,6 @@ function layoutConceptZones(
           zoneItems.push({ id: c.id, x: 0, y: 0, w, h, z: ++z, framed: false });
           cursorY = h;
         } else if (idx === 1) {
-          // Diagonal step to bottom-right of anchor (Image #1 PHOTOS cascade!)
           const overlapX = Math.round(52 * t);
           const overlapY = Math.round(h * (0.28 + 0.25 * t));
           const x = 320 - overlapX;
@@ -539,16 +543,14 @@ function layoutConceptZones(
           cursorY = Math.max(cursorY, y + h);
         }
       } else {
-        // Note, file or link inside zone
-        const w = c.kind === 'file' ? 284 : 284;
-        const h = c.kind === 'file' ? 84 : c.kind === 'link' ? 108 : Math.max(132, Math.min(190, c.h));
+        const w = 286;
+        const h = estimateEditorialCardHeight(c, w);
         const y = cursorY === 0 ? 0 : cursorY + 14;
         zoneItems.push({ id: c.id, x: 0, y, w, h, z: ++z });
         cursorY = y + h;
       }
     });
 
-    // Arrange color swatches as a tight 2-column pigment block (Image #1 COLORS)
     if (swatches.length > 0) {
       const swStartY = cursorY === 0 ? 0 : cursorY + 16;
       const swW = 138;
@@ -571,7 +573,6 @@ function layoutConceptZones(
     zoneBoxes.push(normalizeBox(zoneItems));
   }
 
-  // Place zones in a balanced 2-row panoramic spread (max 3 zones per row)
   const zoneGapX = 68;
   const zoneGapY = 64;
   const colsPerRow = Math.min(3, Math.max(2, Math.ceil(zoneBoxes.length / 2)));
@@ -601,9 +602,6 @@ function layoutConceptZones(
 
 /**
  * MODE 4: SWISS MAGAZINE JUSTIFIED GRID (Inspired by Pinterest Reference #6)
- * - Every row is mathematically aspect-ratio justified so both the left and right outer margins
- *   align to a razor-sharp master width (W_master = 920px) while keeping 100% true image aspect ratios!
- * - Swatches form a full-width equal-division palette strip across the bottom.
  */
 function layoutSwissJustifiedGrid(
   cards: Card[],
@@ -616,13 +614,12 @@ function layoutSwissJustifiedGrid(
   let cursorY = 0;
   let z = baseZ;
 
-  // 1. Top Editorial Specification Row (Notes / Files / Links)
   if (editorials.length > 0) {
     const perRow = Math.min(3, editorials.length);
     for (let i = 0; i < editorials.length; i += perRow) {
       const slice = editorials.slice(i, i + perRow);
       const cellW = Math.floor((masterW - gap * (slice.length - 1)) / slice.length);
-      const rowH = slice.some((c) => c.kind === 'note') ? 148 : 96;
+      const rowH = Math.max(...slice.map((c) => estimateEditorialCardHeight(c, cellW)));
       slice.forEach((c, idx) => {
         items.push({
           id: c.id,
@@ -637,12 +634,12 @@ function layoutSwissJustifiedGrid(
     }
   }
 
-  // 2. Justified Aspect-Ratio Image Rows (alternating 2-card Hero row and 3-card Detail row)
   let imgIdx = 0;
   let rowPatternIdx = 0;
   while (imgIdx < allImages.length) {
     const remaining = allImages.length - imgIdx;
-    const targetCount = remaining === 1 ? 1 : remaining === 2 ? 2 : rowPatternIdx % 2 === 0 ? 2 : 3;
+    const targetCount =
+      remaining === 1 ? 1 : remaining === 2 ? 2 : rowPatternIdx % 2 === 0 ? 2 : 3;
     const rowImgs = allImages.slice(imgIdx, imgIdx + targetCount);
     imgIdx += rowImgs.length;
     rowPatternIdx++;
@@ -655,7 +652,9 @@ function layoutSwissJustifiedGrid(
     let rowX = 0;
     rowImgs.forEach((c, i) => {
       const isLast = i === rowImgs.length - 1;
-      const w = isLast ? Math.max(120, masterW - rowX) : Math.max(120, Math.round(rowH * aspects[i]));
+      const w = isLast
+        ? Math.max(120, masterW - rowX)
+        : Math.max(120, Math.round(rowH * aspects[i]));
       items.push({
         id: c.id,
         x: rowX,
@@ -670,7 +669,6 @@ function layoutSwissJustifiedGrid(
     cursorY += rowH + gap;
   }
 
-  // 3. Bottom Full-Width Palette Strip (Image #6 Colour Palette bar)
   if (swatches.length > 0) {
     const n = swatches.length;
     const swW = Math.floor((masterW - gap * (n - 1)) / n);
@@ -727,11 +725,6 @@ function findNonCollidingPlacement(
   return { x, y };
 }
 
-/**
- * Pure deterministic Designer Moodboard Auto-Layout Engine.
- * Supports 4 authentic studio archetypes ('bento', 'freeform', 'zones', 'grid')
- * plus locked card/frame protection and obstacle avoidance.
- */
 export function computeArrangedCards(
   allCards: Card[],
   selectedIds: string[],
@@ -773,7 +766,6 @@ export function computeArrangedCards(
   const startOriginX = targetBounds ? Math.round(targetBounds.x) : 80;
   const startOriginY = targetBounds ? Math.round(targetBounds.y) : 80;
 
-  // Separate intact unlocked group frames from loose cards
   const groupedFrameIds = new Set<string>();
   for (const c of targetedCards) {
     if (c.kind === 'frame') {
@@ -784,10 +776,7 @@ export function computeArrangedCards(
 
   const looseCards = targetedCards
     .filter((c) => c.kind !== 'frame' && !(c.groupId && groupedFrameIds.has(c.groupId)))
-    .sort(
-      (a, b) =>
-        a.createdAt.localeCompare(b.createdAt) || a.id.localeCompare(b.id)
-    );
+    .sort((a, b) => a.createdAt.localeCompare(b.createdAt) || a.id.localeCompare(b.id));
 
   const maxExistingZ = boardCards.reduce((m, c) => Math.max(m, c.z), 1);
   let nextBaseZ = maxExistingZ + 2;
@@ -801,23 +790,14 @@ export function computeArrangedCards(
     } else if (options.mode === 'zones') {
       mainBox = layoutConceptZones(looseCards, options, nextBaseZ);
     } else if (options.mode === 'grid') {
-      if (options.groupByCategory) {
-        // When grouping by category in Grid mode, create clean Swiss rows per category
-        mainBox = layoutSwissJustifiedGrid(looseCards, nextBaseZ);
-      } else {
-        mainBox = layoutSwissJustifiedGrid(looseCards, nextBaseZ);
-      }
+      mainBox = layoutSwissJustifiedGrid(looseCards, nextBaseZ);
     } else {
-      // 'freeform' (Layered Focal Collage)
-      mainBox = options.groupByCategory
-        ? layoutFocalCollage(looseCards, options, nextBaseZ)
-        : layoutFocalCollage(looseCards, { ...options, overlap: Math.max(25, options.overlap) }, nextBaseZ);
+      mainBox = layoutFocalCollage(looseCards, options, nextBaseZ);
     }
     boxes.push(mainBox);
     nextBaseZ += looseCards.length + 80;
   }
 
-  // Keep existing unlocked group frames intact as atomic units
   for (const frameId of [...groupedFrameIds].sort()) {
     const frame = targetedCards.find((c) => c.id === frameId);
     const members = targetedCards.filter((c) => c.groupId === frameId);
