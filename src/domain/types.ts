@@ -44,6 +44,7 @@ export interface Card {
   source?: Source;
   assetId?: string;
   imageStatus?: ImageStatus;
+  framed?: boolean;
   designFile?: { extension: string; size?: number };
   createdAt: string;
   updatedAt: string;
@@ -100,10 +101,13 @@ export interface WorkspaceMeta {
   createdAt: string;
 }
 
+export type ArrangeMode = 'bento' | 'freeform' | 'zones' | 'grid';
+
 export interface ArrangeOptions {
-  mode: 'freeform' | 'grid';
+  mode: ArrangeMode;
   groupByCategory: boolean;
-  overlap: number; // 0..100
+  overlap: number; // 0..100: controls hierarchy contrast & corner-inset depth
+  galleryFrame?: boolean;
 }
 
 export interface ExportPngOptions {

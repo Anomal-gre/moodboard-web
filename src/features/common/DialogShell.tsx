@@ -33,6 +33,11 @@ export const DialogShell: React.FC<DialogShellProps> = ({
 }) => {
   const panelRef = useRef<HTMLDivElement | null>(null);
   const previousFocusRef = useRef<HTMLElement | null>(null);
+  const onCloseRef = useRef(onClose);
+
+  useEffect(() => {
+    onCloseRef.current = onClose;
+  }, [onClose]);
 
   useEffect(() => {
     if (!open) return;
@@ -50,10 +55,11 @@ export const DialogShell: React.FC<DialogShellProps> = ({
     }, 10);
 
     const onKeyDown = (e: KeyboardEvent) => {
+      if (e.isComposing) return;
       if (e.key === 'Escape') {
         e.preventDefault();
         e.stopPropagation();
-        onClose();
+        onCloseRef.current();
         return;
       }
       if (e.key === 'Tab' && panelRef.current) {
@@ -82,7 +88,7 @@ export const DialogShell: React.FC<DialogShellProps> = ({
         window.setTimeout(() => prev.focus(), 0);
       }
     };
-  }, [open, onClose]);
+  }, [open]);
 
   if (!open) return null;
 

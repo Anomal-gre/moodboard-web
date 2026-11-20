@@ -1,18 +1,20 @@
 :root {
-  /* Light studio paper palette (Spec Section 3) */
+  /* Studio paper, forest ink and oak */
   --paper-bg: #f1f0eb;
-  --surface: #fbfcf8;
-  --surface-elevated: #ffffff;
-  --surface-subtle: #f4f5f0;
-  --ink: #303a31;
-  --ink-muted: #646f65;
-  --ink-faint: #8c968d;
-  --border: #e2e4dc;
-  --border-strong: #c9cdc1;
-  --accent: #365b49;
-  --accent-hover: #2a4839;
-  --accent-soft: rgba(54, 91, 73, 0.11);
-  --accent-ring: rgba(54, 91, 73, 0.34);
+  --surface: #faf8f2;
+  --surface-elevated: #fffefa;
+  --surface-subtle: #f0eee7;
+  --ink: #243129;
+  --ink-muted: #5b685f;
+  --ink-faint: #667168;
+  --border: #e0ded4;
+  --border-strong: #c9c7ba;
+  --accent: #2e523f;
+  --accent-hover: #213e30;
+  --accent-soft: rgba(46, 82, 63, 0.11);
+  --accent-ring: rgba(46, 82, 63, 0.34);
+  --on-accent: #fffefa;
+  --oak: #e8d6bd;
   --danger: #b5453b;
   --danger-soft: rgba(181, 69, 59, 0.1);
   --warn: #a66c1f;
@@ -32,6 +34,10 @@
   --radius-lg: 14px;
   --radius-pill: 999px;
 
+  --workspace-gutter: 20px;
+  --workspace-header-height: 68px;
+  --workspace-footer-clearance: 76px;
+
   /* Shadows */
   --shadow-sm: 0 2px 8px rgba(28, 36, 29, 0.06), 0 1px 2px rgba(28, 36, 29, 0.04);
   --shadow-md: 0 8px 24px rgba(28, 36, 29, 0.09), 0 2px 6px rgba(28, 36, 29, 0.05);
@@ -41,6 +47,7 @@
 
   /* Typography */
   --font-sans: 'Segoe UI', -apple-system, BlinkMacSystemFont, 'Inter', Arial, sans-serif;
+  --font-display: Georgia, 'Times New Roman', serif;
   --font-mono: 'Cascadia Code', Consolas, ui-monospace, monospace;
 
   /* Timing */
@@ -50,18 +57,21 @@
 }
 
 .theme-dark {
-  --surface: #222723;
-  --surface-elevated: #2a302b;
-  --surface-subtle: #1e231f;
+  color-scheme: dark;
+  --surface: #242b25;
+  --surface-elevated: #2b342d;
+  --surface-subtle: #1f2620;
   --ink: #eef0ea;
   --ink-muted: #adb5ae;
-  --ink-faint: #7d877e;
+  --ink-faint: #a0aba1;
   --border: #343b35;
   --border-strong: #48524a;
-  --accent: #689f83;
-  --accent-hover: #7bb497;
-  --accent-soft: rgba(104, 159, 131, 0.16);
-  --accent-ring: rgba(104, 159, 131, 0.42);
+  --accent: #a9ceb4;
+  --accent-hover: #bfdfc9;
+  --accent-soft: rgba(169, 206, 180, 0.15);
+  --accent-ring: rgba(169, 206, 180, 0.42);
+  --on-accent: #182c22;
+  --oak: #6d5643;
   --danger: #e2746a;
   --danger-soft: rgba(226, 116, 106, 0.16);
   --warn: #e0a650;

@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
-import { Eye, LayoutGrid, Layers } from 'lucide-react';
-import type { ArrangeOptions } from '../../domain/types';
+import { Eye, Grid, Layers, LayoutDashboard, PanelsTopLeft } from 'lucide-react';
+import type { ArrangeMode, ArrangeOptions } from '../../domain/types';
 import type { I18nDict } from '../../i18n';
 import { DialogShell } from '../common/DialogShell';
 
@@ -24,9 +24,10 @@ export const ArrangeModal: React.FC<ArrangeModalProps> = ({
   onClose,
 }) => {
   const [options, setOptions] = useState<ArrangeOptions>({
-    mode: 'freeform',
+    mode: 'bento',
     groupByCategory: true,
-    overlap: 35,
+    overlap: 55,
+    galleryFrame: true,
   });
   const [previewActive, setPreviewActive] = useState(false);
 
@@ -36,10 +37,11 @@ export const ArrangeModal: React.FC<ArrangeModalProps> = ({
     }
   }, [open]);
 
-  const updateOptions = (patch: Partial<ArrangeOptions>) => {
+  const updateOptions = (patch: Partial<ArrangeOptions>, autoPreview = false) => {
     const next = { ...options, ...patch };
     setOptions(next);
-    if (previewActive) {
+    if (previewActive || autoPreview) {
+      setPreviewActive(true);
       onPreview(next);
     }
   };
@@ -61,11 +63,50 @@ export const ArrangeModal: React.FC<ArrangeModalProps> = ({
     onClose();
   };
 
+  const archetypes: Array<{
+    mode: ArrangeMode;
+    title: string;
+    desc: string;
+    icon: React.ReactNode;
+  }> = [
+    {
+      mode: 'bento',
+      title: dict.arrangeBento,
+      desc: dict.arrangeBentoDesc,
+      icon: <PanelsTopLeft size={16} />,
+    },
+    {
+      mode: 'freeform',
+      title: dict.arrangeFreeform,
+      desc: dict.arrangeFreeformDesc,
+      icon: <Layers size={16} />,
+    },
+    {
+      mode: 'zones',
+      title: dict.arrangeZones,
+      desc: dict.arrangeZonesDesc,
+      icon: <LayoutDashboard size={16} />,
+    },
+    {
+      mode: 'grid',
+      title: dict.arrangeGrid,
+      desc: dict.arrangeGridDesc,
+      icon: <Grid size={16} />,
+    },
+  ];
+
+  const overlapHint =
+    options.overlap < 25
+      ? dict.arrangeOverlapHintLow
+      : options.overlap < 70
+        ? dict.arrangeOverlapHintMid
+        : dict.arrangeOverlapHintHigh;
+
   return (
     <DialogShell
       open={open}
       title={dict.arrangeTitle}
-      width={400}
+      width={460}
       closeLabel={dict.close}
       onClose={handleCancel}
       nonBlocking={previewActive}
@@ -89,23 +130,24 @@ export const ArrangeModal: React.FC<ArrangeModalProps> = ({
           {selectedCount > 0 ? dict.arrangeScopeSelection(selectedCount) : dict.arrangeScopeAll}
         </p>
 
-        <div className="seg-control">
-          <button
-            type="button"
-            className={`seg-btn ${options.mode === 'freeform' ? 'is-active' : ''}`}
-            onClick={() => updateOptions({ mode: 'freeform' })}
-          >
-            <Layers size={14} />
-            <span>{dict.arrangeFreeform}</span>
-          </button>
-          <button
-            type="button"
-            className={`seg-btn ${options.mode === 'grid' ? 'is-active' : ''}`}
-            onClick={() => updateOptions({ mode: 'grid' })}
-          >
-            <LayoutGrid size={14} />
-            <span>{dict.arrangeGrid}</span>
-          </button>
+        <div className="archetype-grid">
+          {archetypes.map((a) => {
+            const active = options.mode === a.mode;
+            return (
+              <button
+                key={a.mode}
+                type="button"
+                className={`archetype-card ${active ? 'is-active' : ''}`}
+                onClick={() => updateOptions({ mode: a.mode })}
+              >
+                <div className="archetype-card-head">
+                  {a.icon}
+                  <span>{a.title}</span>
+                </div>
+                <p className="archetype-card-desc">{a.desc}</p>
+              </button>
+            );
+          })}
         </div>
 
         <label className="toggle-row">
@@ -117,21 +159,33 @@ export const ArrangeModal: React.FC<ArrangeModalProps> = ({
           />
         </label>
 
-        {options.mode === 'freeform' && (
-          <div className="field">
-            <div className="field-row-between">
-              <span className="field-label">{dict.arrangeOverlap}</span>
-              <span className="mono">{options.overlap}%</span>
+        {options.mode !== 'grid' && (
+          <>
+            <div className="field">
+              <div className="field-row-between">
+                <span className="field-label">{dict.arrangeOverlap}</span>
+                <span className="mono">{options.overlap}%</span>
+              </div>
+              <input
+                type="range"
+                min={0}
+                max={100}
+                step={5}
+                value={options.overlap}
+                onChange={(e) => updateOptions({ overlap: Number(e.target.value) })}
+              />
+              <span className="field-hint">{overlapHint}</span>
             </div>
-            <input
-              type="range"
-              min={0}
-              max={100}
-              step={5}
-              value={options.overlap}
-              onChange={(e) => updateOptions({ overlap: Number(e.target.value) })}
-            />
-          </div>
+
+            <label className="toggle-row">
+              <span>{dict.arrangeGalleryFrame}</span>
+              <input
+                type="checkbox"
+                checked={options.galleryFrame ?? true}
+                onChange={(e) => updateOptions({ galleryFrame: e.target.checked })}
+              />
+            </label>
+          </>
         )}
 
         {previewActive && (

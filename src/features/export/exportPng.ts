@@ -247,10 +247,18 @@ export async function renderMoodboardPng(
     ctx.shadowOffsetY = 4;
 
     if (card.kind === 'image') {
+      const pad = card.framed ? 6 : 0;
       roundRectPath(ctx, x, y, w, h, 10);
-      ctx.fillStyle = darkTheme ? '#282E29' : '#FFFFFF';
+      ctx.fillStyle = card.framed ? '#FFFFFF' : darkTheme ? '#282E29' : '#FFFFFF';
       ctx.fill();
       ctx.shadowColor = 'transparent';
+      if (card.framed) {
+        ctx.lineWidth = 1;
+        ctx.strokeStyle = 'rgba(48, 58, 49, 0.12)';
+        ctx.stroke();
+      }
+      ctx.save();
+      roundRectPath(ctx, x + pad, y + pad, Math.max(1, w - pad * 2), Math.max(1, h - pad * 2), card.framed ? 6 : 10);
       ctx.clip();
 
       let rendered = false;
@@ -259,7 +267,7 @@ export async function renderMoodboardPng(
         if (blob) {
           try {
             const img = await decodeImageElement(blob);
-            drawCoverImage(ctx, img, x, y, w, h);
+            drawCoverImage(ctx, img, x + pad, y + pad, Math.max(1, w - pad * 2), Math.max(1, h - pad * 2));
             rendered = true;
           } catch {
             rendered = false;
@@ -269,7 +277,7 @@ export async function renderMoodboardPng(
 
       if (!rendered) {
         ctx.fillStyle = darkTheme ? '#2E352F' : '#E8E7E0';
-        ctx.fillRect(x, y, w, h);
+        ctx.fillRect(x + pad, y + pad, w - pad * 2, h - pad * 2);
         ctx.strokeStyle = darkTheme ? '#49534B' : '#C9CCC2';
         ctx.lineWidth = 1;
         ctx.strokeRect(x + 8, y + 8, w - 16, h - 16);
@@ -281,6 +289,7 @@ export async function renderMoodboardPng(
         ctx.fillText('(Ô giữ chỗ)', x + w / 2, y + h / 2 + 16, w - 24);
         ctx.textAlign = 'left';
       }
+      ctx.restore();
       ctx.restore();
       continue;
     }

@@ -146,6 +146,7 @@ export function createSampleProject(): Project {
       locked: false,
       assetId: 'sample_armchair',
       imageStatus: 'ready',
+      framed: true,
       source: {
         fileName: 'armchair.jpg',
         method: 'sample',
@@ -169,6 +170,7 @@ export function createSampleProject(): Project {
       locked: false,
       assetId: 'sample_material_texture',
       imageStatus: 'ready',
+      framed: true,
       source: {
         fileName: 'material-texture.jpg',
         method: 'sample',

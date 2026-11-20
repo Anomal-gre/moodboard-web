@@ -37,27 +37,42 @@ export const SearchBar: React.FC<SearchBarProps> = ({ cards, dict, onSelectResul
       .slice(0, 10);
   }, [cards, dict, query]);
 
+  const selectResult = (card: Card) => {
+    onSelectResult(card);
+    inputRef.current?.focus();
+    setFocused(false);
+  };
+
   return (
-    <div className="search-anchor">
-      <div className={`search-pill ${focused ? 'is-focused' : ''}`}>
-        <Search size={14} className="muted-icon" />
+    <div
+      className="search-anchor"
+      onBlur={(e) => {
+        if (!e.currentTarget.contains(e.relatedTarget)) setFocused(false);
+      }}
+      onKeyDown={(e) => {
+        if (e.key !== 'Escape' || e.nativeEvent.isComposing || !query) return;
+        e.stopPropagation();
+        setQuery('');
+        inputRef.current?.focus();
+      }}
+    >
+      <div className="search-pill">
+        <Search size={16} className="muted-icon" aria-hidden="true" />
         <input
           ref={inputRef}
           className="search-input"
+          aria-label={dict.searchPlaceholder}
           placeholder={dict.searchPlaceholder}
           value={query}
           onFocus={() => setFocused(true)}
-          onBlur={() => setTimeout(() => setFocused(false), 160)}
-          onChange={(e) => setQuery(e.target.value)}
+          onChange={(e) => {
+            setQuery(e.target.value);
+            setFocused(true);
+          }}
           onKeyDown={(e) => {
-            if (e.key === 'Escape') {
-              setQuery('');
-              inputRef.current?.blur();
-            } else if (e.key === 'Enter' && results.length > 0) {
+            if (e.key === 'Enter' && !e.nativeEvent.isComposing && results.length > 0) {
               e.preventDefault();
-              onSelectResult(results[0]);
-              setFocused(false);
-              inputRef.current?.blur();
+              selectResult(results[0]);
             }
           }}
         />
@@ -65,9 +80,11 @@ export const SearchBar: React.FC<SearchBarProps> = ({ cards, dict, onSelectResul
           <button
             type="button"
             className="search-clear"
-            aria-label={dict.close}
-            onMouseDown={(e) => e.preventDefault()}
-            onClick={() => setQuery('')}
+            aria-label={dict.clearSearch}
+            onClick={() => {
+              inputRef.current?.focus();
+              setQuery('');
+            }}
           >
             <X size={13} />
           </button>
@@ -77,18 +94,14 @@ export const SearchBar: React.FC<SearchBarProps> = ({ cards, dict, onSelectResul
       {focused && query.trim().length > 0 && (
         <div className="search-dropdown">
           {results.length === 0 ? (
-            <div className="search-empty">{dict.searchEmpty}</div>
+            <div className="search-empty" role="status">{dict.searchEmpty}</div>
           ) : (
             results.map((card) => (
               <button
                 key={card.id}
                 type="button"
                 className="search-result-row"
-                onMouseDown={(e) => {
-                  e.preventDefault();
-                  onSelectResult(card);
-                  setFocused(false);
-                }}
+                onClick={() => selectResult(card)}
               >
                 <span className="truncate">{card.title || card.text.slice(0, 32) || card.kind}</span>
                 <span className="search-result-tag">

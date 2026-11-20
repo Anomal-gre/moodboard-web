@@ -106,6 +106,7 @@ export const CardView: React.FC<CardViewProps> = React.memo(
       `board-card--${card.kind}`,
       selected && !presentMode ? 'is-selected' : '',
       card.locked ? 'is-locked' : '',
+      card.framed ? 'is-framed' : '',
       isHighlighted ? 'is-highlighted' : '',
       presentMode ? 'is-present' : '',
     ]

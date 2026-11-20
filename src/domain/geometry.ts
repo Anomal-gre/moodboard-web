@@ -71,27 +71,24 @@ export function computeFitView(
   cards: Card[],
   viewportW: number,
   viewportH: number,
-  margin = 48
+  insets: { side: number; top: number; bottom: number }
 ): ProjectView {
   const bounds = computeCardsBounds(cards);
   if (!bounds || viewportW <= 0 || viewportH <= 0) {
     return { x: Math.round(viewportW * 0.12), y: Math.round(viewportH * 0.14), zoom: 1 };
   }
-  // Reserve space for top bar (64px) and bottom dock (76px)
-  const topPad = 76;
-  const bottomPad = 84;
-  const availW = Math.max(120, viewportW - margin * 2);
-  const availH = Math.max(120, viewportH - topPad - bottomPad - margin);
+  const availW = Math.max(1, viewportW - insets.side * 2);
+  const availH = Math.max(1, viewportH - insets.top - insets.bottom);
 
   const rawZoom = Math.min(availW / bounds.w, availH / bounds.h, 1.15);
-  const zoom = clampZoom(Math.round(rawZoom * 100) / 100);
+  const zoom = clampZoom(rawZoom);
   const centerX = bounds.x + bounds.w / 2;
   const centerY = bounds.y + bounds.h / 2;
 
   return {
     zoom,
     x: Math.round(viewportW / 2 - centerX * zoom),
-    y: Math.round((topPad + (viewportH - topPad - bottomPad) / 2) - centerY * zoom),
+    y: Math.round(insets.top + availH / 2 - centerY * zoom),
   };
 }
 

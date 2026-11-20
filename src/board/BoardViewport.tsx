@@ -100,14 +100,14 @@ export const BoardViewport: React.FC<BoardViewportProps> = ({
   }, [boardCards, draft, editingCardId, highlightedCardId, selectedSet, view, viewportSize]);
 
   const darkBg = isDarkColor(appearance.background);
-  const dotSpacing = Math.max(12, Math.round(24 * view.zoom));
-  const dotColor = darkBg ? 'rgba(255, 255, 255, 0.09)' : 'rgba(48, 58, 49, 0.14)';
+  const dotSpacing = Math.max(16, Math.round(27 * view.zoom));
+  const dotColor = darkBg ? 'rgba(255, 255, 255, 0.14)' : 'rgba(48, 58, 49, 0.18)';
 
   const viewportStyle: React.CSSProperties = {
     backgroundColor: appearance.background,
     backgroundImage:
       appearance.dots && !presentMode
-        ? `radial-gradient(${dotColor} 1.25px, transparent 1.25px)`
+        ? `radial-gradient(${dotColor} 1px, transparent 1px)`
         : 'none',
     backgroundSize: `${dotSpacing}px ${dotSpacing}px`,
     backgroundPosition: `${view.x % dotSpacing}px ${view.y % dotSpacing}px`,
@@ -226,19 +226,23 @@ export const BoardViewport: React.FC<BoardViewportProps> = ({
 
       {/* Empty board state */}
       {boardCards.length === 0 && !presentMode && (
-        <div className="board-empty-state" onPointerDown={(e) => e.stopPropagation()}>
+        <section className="board-empty-state" aria-labelledby="empty-board-title" onPointerDown={(e) => e.stopPropagation()}>
+          <div className="board-empty-art" aria-hidden="true">
+            <span><ImagePlus size={28} strokeWidth={1.5} /></span>
+          </div>
+          <h1 id="empty-board-title">{dict.emptyBoardTitle}</h1>
           <p className="board-empty-text">{dict.emptyBoardGuide}</p>
           <button type="button" className="btn btn-primary" onClick={onTriggerAddImage}>
-            <ImagePlus size={16} />
-            <span>{dict.emptyAddImage}</span>
+            <ImagePlus size={17} />
+            <span>{dict.addMedia}</span>
           </button>
-        </div>
+        </section>
       )}
 
       {/* Drop target visual feedback */}
       {dragOver && (
         <div className="board-drop-overlay" aria-hidden="true">
-          <div className="board-drop-pill">Thả ảnh, URL hoặc file thiết kế lên bảng</div>
+          <div className="board-drop-pill">{dict.boardDropHint}</div>
         </div>
       )}
     </div>

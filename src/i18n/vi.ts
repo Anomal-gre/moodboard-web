@@ -26,16 +26,19 @@ export const vi = {
 
   // Search & Inbox
   searchPlaceholder: 'Tìm trong bảng…',
+  clearSearch: 'Xóa nội dung tìm kiếm',
   searchEmpty: 'Không tìm thấy card phù hợp',
   inInboxTag: 'Trong khay',
   unsorted: 'Chưa sắp xếp',
   inboxDropHint: 'Thả ảnh, file hoặc URL vào đây để gom trước khi xếp',
-  inboxEmpty: 'Khay đang trống. Thả tư liệu vào đây hoặc kéo card lên bảng.',
+  inboxEmpty: 'Khay chưa có tư liệu.',
   moveToBoard: 'Đưa lên bảng',
   moveToInbox: 'Đưa vào khay',
 
   // Dock tools
-  addImageOrFile: 'Ảnh / File',
+  creationTools: 'Công cụ thêm vào bảng',
+  addImageOrFile: 'Thêm ảnh hoặc tệp',
+  addMedia: 'Thêm tư liệu',
   addNote: 'Ghi chú',
   addLink: 'Link',
   addColor: 'Màu',
@@ -48,8 +51,9 @@ export const vi = {
   zoomOut: 'Thu nhỏ',
 
   // Empty state
-  emptyBoardGuide: 'Kéo ảnh, dán URL hoặc nhấn bên dưới để bắt đầu bảng cảm hứng của bạn.',
-  emptyAddImage: 'Thêm ảnh',
+  emptyBoardTitle: 'Bắt đầu từ một ý tưởng',
+  emptyBoardGuide: 'Thả ảnh, dán liên kết hoặc chọn tệp để đưa tư liệu đầu tiên lên bảng.',
+  boardDropHint: 'Thả ảnh, liên kết hoặc tệp thiết kế lên bảng',
 
   // Categories
   cat_reference: 'Công trình / Không gian',
@@ -119,15 +123,25 @@ export const vi = {
   apply: 'Áp dụng',
 
   // Arrange modal
-  arrangeTitle: 'Sắp moodboard tự động',
-  arrangeFreeform: 'Tự do (Collage)',
-  arrangeGrid: 'Lưới đều',
-  arrangeGroupByCat: 'Gom theo phân loại',
-  arrangeOverlap: 'Độ xếp chồng',
+  arrangeTitle: 'Sắp bố cục Moodboard chuẩn Studio',
+  arrangeBento: 'Bento Tạp chí',
+  arrangeBentoDesc: 'Khối mosaic trung tâm + vật liệu đè giao điểm + thanh màu đáy',
+  arrangeFreeform: 'Collage Phân cấp',
+  arrangeFreeformDesc: 'Ảnh Hero lớn ở tâm + ảnh phụ gối 4 góc + thanh màu dọc',
+  arrangeZones: 'Phân khu Concept',
+  arrangeZonesDesc: 'Chia vùng Không gian / Nội thất / Vật liệu xếp bậc thang chéo',
+  arrangeGrid: 'Lưới Căn biên (Swiss)',
+  arrangeGridDesc: 'Giữ tỉ lệ ảnh thật và căn thẳng tuyệt đối hai mép trái – phải',
+  arrangeGroupByCat: 'Ưu tiên gom theo vai trò & phân loại',
+  arrangeOverlap: 'Độ phân cấp Chính–Phụ & Gối góc',
+  arrangeOverlapHintLow: 'Khớp biên sạch (khe thoáng, ít đè)',
+  arrangeOverlapHintMid: 'Gối góc tạp chí (đè 15–20% góc, chừa tâm ảnh)',
+  arrangeOverlapHintHigh: 'Collage đa tầng (Hero phóng đại, gối góc sâu 25%)',
+  arrangeGalleryFrame: 'Viền khung trắng Gallery cho ảnh lớp trên',
   arrangeScopeSelection: (n: number) => `Đang áp dụng cho ${n} mục được chọn (bỏ qua mục khóa).`,
   arrangeScopeAll: 'Đang áp dụng cho toàn bộ card tự do trên bảng (bỏ qua khay và mục khóa).',
   preview: 'Xem trước',
-  previewingHint: 'Đang xem trước bố cục trên bảng — bấm Áp dụng để chốt hoặc Hủy để hoàn nguyên.',
+  previewingHint: 'Đang xem trước trực tiếp trên bảng — bấm Áp dụng để chốt hoặc Hủy để hoàn nguyên.',
 
   // AI Classify modal
   aiTitle: 'Phân loại ảnh bằng AI cục bộ',

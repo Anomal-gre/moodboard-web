@@ -1,12 +1,15 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
+  Check,
+  CircleAlert,
+  CircleDashed,
   Download,
   FileArchive,
-  Group,
   ImagePlus,
   Keyboard,
   LayoutGrid,
   Link2,
+  LoaderCircle,
   Maximize,
   Minus,
   MoreHorizontal,
@@ -87,6 +90,19 @@ import {
 
 const CLIPBOARD_MARKER = '__0Y03_CARDS_V1__';
 
+function fitWorkspaceView(cards: Card[], width: number, height: number, presenting = false) {
+  if (presenting) {
+    return computeFitView(cards, width, height, { side: 20, top: 20, bottom: 76 });
+  }
+
+  const tokens = getComputedStyle(document.documentElement);
+  return computeFitView(cards, width, height, {
+    side: Math.min(48, Math.round(width * 0.05)),
+    top: parseFloat(tokens.getPropertyValue('--workspace-header-height')) + 16,
+    bottom: parseFloat(tokens.getPropertyValue('--workspace-footer-clearance')) + 16,
+  });
+}
+
 export const App: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [storageFatal, setStorageFatal] = useState<string | null>(null);
@@ -163,7 +179,7 @@ export const App: React.FC = () => {
         init.activeProject.view.y === 90
       ) {
         const boardCards = init.activeProject.cards.filter((c) => !c.inbox);
-        const fitted = computeFitView(boardCards, window.innerWidth, window.innerHeight, 48);
+        const fitted = fitWorkspaceView(boardCards, window.innerWidth, window.innerHeight);
         const fittedProj: Project = { ...init.activeProject, view: fitted };
         setProjects([fittedProj]);
         void saveProject(fittedProj);
@@ -227,6 +243,10 @@ export const App: React.FC = () => {
       document.documentElement.classList.remove('theme-dark');
     };
   }, [darkTheme]);
+
+  useEffect(() => {
+    document.documentElement.lang = language;
+  }, [language]);
 
   const displayedCards = useMemo(
     () => arrangePreviewCards ?? activeProject?.cards ?? [],
@@ -384,7 +404,7 @@ export const App: React.FC = () => {
   const handleFitBoard = useCallback(() => {
     if (!activeProject) return;
     const boardCards = activeProject.cards.filter((c) => !c.inbox);
-    const nextView = computeFitView(boardCards, viewportSize.width, viewportSize.height, 48);
+    const nextView = fitWorkspaceView(boardCards, viewportSize.width, viewportSize.height);
     handleViewChange(nextView, true);
   }, [activeProject, handleViewChange, viewportSize.height, viewportSize.width]);
 
@@ -1111,7 +1131,7 @@ export const App: React.FC = () => {
     (document.activeElement as HTMLElement | null)?.blur?.();
     const boardCards = activeProject.cards.filter((c) => !c.inbox);
     if (boardCards.length > 0) {
-      handleViewChange(computeFitView(boardCards, viewportSize.width, viewportSize.height, 40), false);
+      handleViewChange(fitWorkspaceView(boardCards, viewportSize.width, viewportSize.height, true), false);
     }
     window.setTimeout(() => {
       boardRef.current?.focus?.();
@@ -1484,44 +1504,57 @@ export const App: React.FC = () => {
           <header className="topbar">
             <div className="topbar-left">
               <div className="brand-mark">
-                <img src={`${import.meta.env.BASE_URL}brand/logo.svg`} alt="0Y03" className="brand-logo" />
+                <img src={`${import.meta.env.BASE_URL}brand/logo.svg`} alt="" className="brand-logo" />
                 <span>{dict.appName}</span>
               </div>
 
-              <ProjectMenu
-                projects={projects}
-                activeProject={activeProject}
-                dict={dict}
-                onSelectProject={handleSelectProject}
-                onCreateProject={handleCreateProject}
-                onRenameProject={handleRenameProject}
-                onDeleteProject={(id) => void handleDeleteProject(id)}
-              />
+              <div className="topbar-project">
+                <ProjectMenu
+                  projects={projects}
+                  activeProject={activeProject}
+                  dict={dict}
+                  onSelectProject={handleSelectProject}
+                  onCreateProject={handleCreateProject}
+                  onRenameProject={handleRenameProject}
+                  onDeleteProject={(id) => void handleDeleteProject(id)}
+                />
 
-              <div
-                className={`save-pill save-pill--${saveStatus}`}
-                title={saveLabel}
-                role="status"
-              >
-                <span className="save-dot" />
-                <span className="save-pill-text">{saveLabel}</span>
-                {saveStatus === 'error' && (
-                  <button
-                    type="button"
-                    className="btn-xs btn-subtle"
-                    onClick={() => persistProject(activeProject, 0)}
-                  >
-                    {dict.retry}
-                  </button>
-                )}
+                <div className={`save-indicator save-indicator--${saveStatus}`}>
+                  <span className="save-status" title={saveLabel} role="status">
+                    {saveStatus === 'saved' && <Check size={13} aria-hidden="true" />}
+                    {saveStatus === 'saving' && <LoaderCircle size={13} className="spin" aria-hidden="true" />}
+                    {saveStatus === 'unsaved' && <CircleDashed size={13} aria-hidden="true" />}
+                    {saveStatus === 'error' && <CircleAlert size={13} aria-hidden="true" />}
+                    <span className="truncate">{saveLabel}</span>
+                  </span>
+                  {saveStatus === 'error' && (
+                    <button type="button" className="save-retry" onClick={() => persistProject(activeProject, 0)}>
+                      {dict.retry}
+                    </button>
+                  )}
+                </div>
               </div>
+            </div>
+
+            <div className="topbar-discover">
+              <SearchBar cards={activeProject.cards} dict={dict} onSelectResult={handleSearchSelect} />
+              <InboxPanel
+                open={inboxOpen}
+                inboxCards={inboxCards}
+                dict={dict}
+                onToggle={() => setInboxOpen((v) => !v)}
+                onMoveToBoard={(id) => handleMoveFromInboxToBoard(id)}
+                onDeleteCard={(id) => handleDeleteIdsToTrash([id])}
+                onDropExternalToInbox={(dt) => void handleDropExternal(dt, { x: 100, y: 100 }, true)}
+              />
             </div>
 
             <div className="topbar-right">
               <button
                 type="button"
-                className="btn btn-subtle"
+                className="btn topbar-ai-btn"
                 title={dict.aiClassify}
+                aria-label={dict.aiClassify}
                 onClick={() => setClassifyOpen(true)}
               >
                 <Sparkles size={15} />
@@ -1530,13 +1563,16 @@ export const App: React.FC = () => {
 
               <button
                 type="button"
-                className="btn btn-primary"
+                className="btn topbar-arrange-btn"
                 title={dict.arrangeBoard}
+                aria-label={dict.arrangeBoard}
                 onClick={() => setArrangeOpen(true)}
               >
                 <LayoutGrid size={15} />
                 <span className="btn-label-md">{dict.arrangeBoard}</span>
               </button>
+
+              <span className="toolbar-sep topbar-divider" aria-hidden="true" />
 
               <button
                 type="button"
@@ -1570,6 +1606,17 @@ export const App: React.FC = () => {
                 </button>
                 {moreMenuOpen && (
                   <div className="popover-panel popover-panel--right" role="menu">
+                    <button
+                      type="button"
+                      className="popover-action-btn compact-ai-action"
+                      onClick={() => {
+                        setMoreMenuOpen(false);
+                        setClassifyOpen(true);
+                      }}
+                    >
+                      <Sparkles size={15} />
+                      <span>{dict.aiClassify}</span>
+                    </button>
                     <button
                       type="button"
                       className="popover-action-btn"
@@ -1612,24 +1659,6 @@ export const App: React.FC = () => {
             </div>
           </header>
 
-          {/* Search bar top-left */}
-          <SearchBar
-            cards={activeProject.cards}
-            dict={dict}
-            onSelectResult={handleSearchSelect}
-          />
-
-          {/* Unsorted Tray top-right */}
-          <InboxPanel
-            open={inboxOpen}
-            inboxCards={inboxCards}
-            dict={dict}
-            onToggle={() => setInboxOpen((v) => !v)}
-            onMoveToBoard={(id) => handleMoveFromInboxToBoard(id)}
-            onDeleteCard={(id) => handleDeleteIdsToTrash([id])}
-            onDropExternalToInbox={(dt) => void handleDropExternal(dt, { x: 100, y: 100 }, true)}
-          />
-
           {/* Multi-select action bar */}
           <SelectionOverlay
             selectedCards={selectedCards}
@@ -1667,127 +1696,124 @@ export const App: React.FC = () => {
             />
           )}
 
-          {/* Bottom-left Shortcuts button */}
-          <button
-            type="button"
-            className="shortcuts-corner-btn"
-            onClick={() => setShortcutsOpen(true)}
-          >
-            <Keyboard size={14} />
-            <span>{dict.shortcuts}</span>
-          </button>
-
-          {/* Bottom-center Creation Dock */}
-          <nav className="bottom-dock" aria-label="Công cụ tạo">
+          <footer className="workspace-footer">
             <button
               type="button"
-              className="dock-btn"
-              title={dict.addImageOrFile}
-              onClick={() => filePickerRef.current?.click()}
+              className="shortcuts-corner-btn"
+              title={dict.shortcuts}
+              aria-label={dict.shortcuts}
+              onClick={() => setShortcutsOpen(true)}
             >
-              <ImagePlus size={17} />
-              <span className="dock-label">{dict.addImageOrFile}</span>
-            </button>
-            <button
-              type="button"
-              className="dock-btn"
-              title={dict.addNote}
-              onClick={() => createNoteAt(getViewportCenterWorld())}
-            >
-              <StickyNote size={17} />
-              <span className="dock-label">{dict.addNote}</span>
-            </button>
-            <button
-              type="button"
-              className="dock-btn"
-              title={dict.addLink}
-              onClick={() => setAddLinkOpen(true)}
-            >
-              <Link2 size={17} />
-              <span className="dock-label">{dict.addLink}</span>
-            </button>
-            <button
-              type="button"
-              className="dock-btn"
-              title={dict.addColor}
-              onClick={createColorCard}
-            >
-              <Palette size={17} />
-              <span className="dock-label">{dict.addColor}</span>
-            </button>
-            <button
-              type="button"
-              className="dock-btn"
-              title={dict.addGroup}
-              disabled={selectedCards.filter((c) => !c.locked && c.kind !== 'frame').length < 2}
-              onClick={handleGroupSelected}
-            >
-              <Group size={17} />
-              <span className="dock-label">{dict.addGroup}</span>
+              <Keyboard size={14} />
+              <span>{dict.shortcuts}</span>
             </button>
 
-            <span className="toolbar-sep" />
+            {/* Bottom-center Creation Dock */}
+            <nav className="bottom-dock" aria-label={dict.creationTools}>
+              <button
+                type="button"
+                className="dock-btn btn-primary dock-btn--primary"
+                title={dict.addImageOrFile}
+                aria-label={dict.addMedia}
+                onClick={() => filePickerRef.current?.click()}
+              >
+                <ImagePlus size={17} />
+                <span>{dict.addMedia}</span>
+              </button>
+              <button
+                type="button"
+                className="dock-btn"
+                title={dict.addNote}
+                aria-label={dict.addNote}
+                onClick={() => createNoteAt(getViewportCenterWorld())}
+              >
+                <StickyNote size={17} />
+                <span className="dock-label">{dict.addNote}</span>
+              </button>
+              <button
+                type="button"
+                className="dock-btn"
+                title={dict.addLink}
+                aria-label={dict.addLink}
+                onClick={() => setAddLinkOpen(true)}
+              >
+                <Link2 size={17} />
+                <span className="dock-label">{dict.addLink}</span>
+              </button>
+              <button
+                type="button"
+                className="dock-btn"
+                title={dict.addColor}
+                aria-label={dict.addColor}
+                onClick={createColorCard}
+              >
+                <Palette size={17} />
+                <span className="dock-label">{dict.addColor}</span>
+              </button>
+              <span className="toolbar-sep" aria-hidden="true" />
 
-            <button
-              type="button"
-              className="icon-btn"
-              title={`${dict.undo} (Ctrl+Z)`}
-              aria-label={dict.undo}
-              disabled={!canUndo}
-              onClick={handleUndo}
-            >
-              <Undo2 size={16} />
-            </button>
-            <button
-              type="button"
-              className="icon-btn"
-              title={`${dict.redo} (Ctrl+Shift+Z)`}
-              aria-label={dict.redo}
-              disabled={!canRedo}
-              onClick={handleRedo}
-            >
-              <Redo2 size={16} />
-            </button>
-          </nav>
+              <button
+                type="button"
+                className="icon-btn"
+                title={`${dict.undo} (Ctrl+Z)`}
+                aria-label={dict.undo}
+                disabled={!canUndo}
+                onClick={handleUndo}
+              >
+                <Undo2 size={16} />
+              </button>
+              <button
+                type="button"
+                className="icon-btn"
+                title={`${dict.redo} (Ctrl+Shift+Z)`}
+                aria-label={dict.redo}
+                disabled={!canRedo}
+                onClick={handleRedo}
+              >
+                <Redo2 size={16} />
+              </button>
+            </nav>
 
-          {/* Bottom-right Zoom Bar */}
-          <div className="zoom-bar">
-            <button
-              type="button"
-              className="icon-btn-sm"
-              title={dict.zoomOut}
-              aria-label={dict.zoomOut}
-              onClick={() => handleZoomStep(1 / 1.2)}
-            >
-              <Minus size={15} />
-            </button>
-            <button
-              type="button"
-              className="zoom-pct-btn"
-              title={dict.zoomReset}
-              onClick={handleZoomReset}
-            >
-              {Math.round(activeProject.view.zoom * 100)}%
-            </button>
-            <button
-              type="button"
-              className="icon-btn-sm"
-              title={dict.zoomIn}
-              aria-label={dict.zoomIn}
-              onClick={() => handleZoomStep(1.2)}
-            >
-              <Plus size={15} />
-            </button>
-            <button
-              type="button"
-              className="icon-btn-sm"
-              title={dict.fitBoard}
-              aria-label={dict.fitBoard}
-              onClick={handleFitBoard}
-            >
-              <Maximize size={14} />
-            </button>
-          </div>
+            {/* Bottom-right Zoom Bar */}
+            <div className="zoom-bar">
+              <button
+                type="button"
+                className="icon-btn-sm"
+                title={dict.zoomOut}
+                aria-label={dict.zoomOut}
+                onClick={() => handleZoomStep(1 / 1.2)}
+              >
+                <Minus size={15} />
+              </button>
+              <button
+                type="button"
+                className="zoom-pct-btn"
+                title={dict.zoomReset}
+                onClick={handleZoomReset}
+              >
+                {Math.round(activeProject.view.zoom * 100)}%
+              </button>
+              <button
+                type="button"
+                className="icon-btn-sm"
+                title={dict.zoomIn}
+                aria-label={dict.zoomIn}
+                onClick={() => handleZoomStep(1.2)}
+              >
+                <Plus size={15} />
+              </button>
+              <span className="toolbar-sep" aria-hidden="true" />
+              <button
+                type="button"
+                className="icon-btn-sm"
+                title={dict.fitBoard}
+                aria-label={dict.fitBoard}
+                onClick={handleFitBoard}
+              >
+                <Maximize size={14} />
+              </button>
+            </div>
+          </footer>
         </>
       )}
 

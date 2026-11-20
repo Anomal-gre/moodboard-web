@@ -79,17 +79,20 @@ export const InboxPanel: React.FC<InboxPanelProps> = ({
       <button
         type="button"
         className={`inbox-toggle-btn ${open ? 'is-open' : ''}`}
+        aria-label={`${dict.unsorted} (${inboxCards.length})`}
         aria-expanded={open}
+        aria-controls={open ? 'inbox-panel' : undefined}
         onClick={onToggle}
       >
         <Inbox size={15} />
-        <span>{dict.unsorted}</span>
+        <span className="inbox-toggle-label">{dict.unsorted}</span>
         <span className="inbox-count-badge">{inboxCards.length}</span>
-        <ChevronDown size={14} className={open ? 'rotate-180' : ''} />
+        <ChevronDown size={14} className={`inbox-chevron ${open ? 'rotate-180' : ''}`} />
       </button>
 
       {open && (
         <aside
+          id="inbox-panel"
           className={`floating-panel inbox-panel ${dragOver ? 'is-drag-over' : ''}`}
           aria-label={dict.unsorted}
           onDragOver={(e) => {
@@ -110,7 +113,10 @@ export const InboxPanel: React.FC<InboxPanelProps> = ({
             onDropExternalToInbox(e.dataTransfer);
           }}
         >
-          <div className="inbox-dropzone">{dict.inboxDropHint}</div>
+          <div className="inbox-dropzone">
+            <Inbox size={19} aria-hidden="true" />
+            <span>{dict.inboxDropHint}</span>
+          </div>
 
           {inboxCards.length === 0 ? (
             <p className="inbox-empty">{dict.inboxEmpty}</p>
