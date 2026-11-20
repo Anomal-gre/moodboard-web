@@ -1,0 +1,88 @@
+:root {
+  /* Light studio paper palette (Spec Section 3) */
+  --paper-bg: #f1f0eb;
+  --surface: #fbfcf8;
+  --surface-elevated: #ffffff;
+  --surface-subtle: #f4f5f0;
+  --ink: #303a31;
+  --ink-muted: #646f65;
+  --ink-faint: #8c968d;
+  --border: #e2e4dc;
+  --border-strong: #c9cdc1;
+  --accent: #365b49;
+  --accent-hover: #2a4839;
+  --accent-soft: rgba(54, 91, 73, 0.11);
+  --accent-ring: rgba(54, 91, 73, 0.34);
+  --danger: #b5453b;
+  --danger-soft: rgba(181, 69, 59, 0.1);
+  --warn: #a66c1f;
+  --warn-soft: rgba(166, 108, 31, 0.12);
+
+  /* Dark theme reference */
+  --dark-paper-bg: #191d1a;
+
+  /* Spacing & radii */
+  --sp-1: 4px;
+  --sp-2: 8px;
+  --sp-3: 12px;
+  --sp-4: 16px;
+  --sp-6: 24px;
+  --radius-sm: 8px;
+  --radius-md: 10px;
+  --radius-lg: 14px;
+  --radius-pill: 999px;
+
+  /* Shadows */
+  --shadow-sm: 0 2px 8px rgba(28, 36, 29, 0.06), 0 1px 2px rgba(28, 36, 29, 0.04);
+  --shadow-md: 0 8px 24px rgba(28, 36, 29, 0.09), 0 2px 6px rgba(28, 36, 29, 0.05);
+  --shadow-lg: 0 18px 46px rgba(22, 30, 24, 0.16), 0 4px 12px rgba(22, 30, 24, 0.08);
+  --shadow-card: 0 4px 16px rgba(28, 36, 29, 0.08), 0 1px 3px rgba(28, 36, 29, 0.05);
+  --shadow-card-hover: 0 10px 28px rgba(28, 36, 29, 0.14), 0 2px 6px rgba(28, 36, 29, 0.06);
+
+  /* Typography */
+  --font-sans: 'Segoe UI', -apple-system, BlinkMacSystemFont, 'Inter', Arial, sans-serif;
+  --font-mono: 'Cascadia Code', Consolas, ui-monospace, monospace;
+
+  /* Timing */
+  --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+  --dur-fast: 140ms;
+  --dur-med: 220ms;
+}
+
+.theme-dark {
+  --surface: #222723;
+  --surface-elevated: #2a302b;
+  --surface-subtle: #1e231f;
+  --ink: #eef0ea;
+  --ink-muted: #adb5ae;
+  --ink-faint: #7d877e;
+  --border: #343b35;
+  --border-strong: #48524a;
+  --accent: #689f83;
+  --accent-hover: #7bb497;
+  --accent-soft: rgba(104, 159, 131, 0.16);
+  --accent-ring: rgba(104, 159, 131, 0.42);
+  --danger: #e2746a;
+  --danger-soft: rgba(226, 116, 106, 0.16);
+  --warn: #e0a650;
+  --warn-soft: rgba(224, 166, 80, 0.16);
+  --shadow-sm: 0 2px 10px rgba(0, 0, 0, 0.28);
+  --shadow-md: 0 10px 28px rgba(0, 0, 0, 0.38);
+  --shadow-lg: 0 20px 52px rgba(0, 0, 0, 0.55);
+  --shadow-card: 0 6px 20px rgba(0, 0, 0, 0.34);
+  --shadow-card-hover: 0 12px 32px rgba(0, 0, 0, 0.48);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --dur-fast: 0ms;
+    --dur-med: 0ms;
+  }
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}

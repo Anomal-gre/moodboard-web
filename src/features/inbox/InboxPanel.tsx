@@ -1,0 +1,161 @@
+import React, { useEffect, useState } from 'react';
+import {
+  ArrowUpLeft,
+  ChevronDown,
+  FileCode2,
+  Inbox,
+  Link2,
+  StickyNote,
+  Trash2,
+} from 'lucide-react';
+import type { Card } from '../../domain/types';
+import type { I18nDict } from '../../i18n';
+import { resolveAssetUrl } from '../../storage/workspaceRepository';
+
+interface InboxPanelProps {
+  open: boolean;
+  inboxCards: Card[];
+  dict: I18nDict;
+  onToggle: () => void;
+  onMoveToBoard: (cardId: string) => void;
+  onDeleteCard: (cardId: string) => void;
+  onDropExternalToInbox: (dt: DataTransfer) => void;
+}
+
+const InboxThumb: React.FC<{ card: Card }> = ({ card }) => {
+  const [url, setUrl] = useState<string | null>(null);
+  useEffect(() => {
+    let alive = true;
+    if (card.kind === 'image' && card.assetId) {
+      resolveAssetUrl(card.assetId, 'thumb').then((u) => {
+        if (alive) setUrl(u);
+      });
+    }
+    return () => {
+      alive = false;
+    };
+  }, [card.kind, card.assetId]);
+
+  if (card.kind === 'image' && url) {
+    return <img src={url} alt={card.title} className="inbox-thumb-img" />;
+  }
+  if (card.kind === 'color') {
+    return <div className="inbox-thumb-color" style={{ backgroundColor: card.color || '#8D9A7C' }} />;
+  }
+  if (card.kind === 'file') {
+    return (
+      <div className="inbox-thumb-icon">
+        <FileCode2 size={16} />
+      </div>
+    );
+  }
+  if (card.kind === 'link') {
+    return (
+      <div className="inbox-thumb-icon">
+        <Link2 size={16} />
+      </div>
+    );
+  }
+  return (
+    <div className="inbox-thumb-icon">
+      <StickyNote size={16} />
+    </div>
+  );
+};
+
+export const InboxPanel: React.FC<InboxPanelProps> = ({
+  open,
+  inboxCards,
+  dict,
+  onToggle,
+  onMoveToBoard,
+  onDeleteCard,
+  onDropExternalToInbox,
+}) => {
+  const [dragOver, setDragOver] = useState(false);
+
+  return (
+    <div className="inbox-anchor">
+      <button
+        type="button"
+        className={`inbox-toggle-btn ${open ? 'is-open' : ''}`}
+        aria-expanded={open}
+        onClick={onToggle}
+      >
+        <Inbox size={15} />
+        <span>{dict.unsorted}</span>
+        <span className="inbox-count-badge">{inboxCards.length}</span>
+        <ChevronDown size={14} className={open ? 'rotate-180' : ''} />
+      </button>
+
+      {open && (
+        <aside
+          className={`floating-panel inbox-panel ${dragOver ? 'is-drag-over' : ''}`}
+          aria-label={dict.unsorted}
+          onDragOver={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            setDragOver(true);
+          }}
+          onDragLeave={(e) => {
+            if (!e.currentTarget.contains(e.relatedTarget as Node | null)) {
+              setDragOver(false);
+            }
+          }}
+          onDrop={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            setDragOver(false);
+            if (e.dataTransfer.getData('application/x-0y03-inbox-card')) return;
+            onDropExternalToInbox(e.dataTransfer);
+          }}
+        >
+          <div className="inbox-dropzone">{dict.inboxDropHint}</div>
+
+          {inboxCards.length === 0 ? (
+            <p className="inbox-empty">{dict.inboxEmpty}</p>
+          ) : (
+            <div className="inbox-list">
+              {inboxCards.map((card) => (
+                <div
+                  key={card.id}
+                  className="inbox-item"
+                  draggable
+                  onDragStart={(e) => {
+                    e.dataTransfer.setData('application/x-0y03-inbox-card', card.id);
+                    e.dataTransfer.effectAllowed = 'move';
+                  }}
+                >
+                  <InboxThumb card={card} />
+                  <div className="inbox-item-meta">
+                    <div className="inbox-item-title truncate">{card.title || card.kind}</div>
+                    {card.text && <div className="inbox-item-sub truncate">{card.text}</div>}
+                  </div>
+                  <div className="inbox-item-actions">
+                    <button
+                      type="button"
+                      className="btn-xs btn-subtle"
+                      title={dict.moveToBoard}
+                      onClick={() => onMoveToBoard(card.id)}
+                    >
+                      <ArrowUpLeft size={12} />
+                      <span className="hide-xs">{dict.moveToBoard}</span>
+                    </button>
+                    <button
+                      type="button"
+                      className="icon-btn-sm icon-btn--danger"
+                      title={dict.deleteToTrash}
+                      onClick={() => onDeleteCard(card.id)}
+                    >
+                      <Trash2 size={13} />
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </aside>
+      )}
+    </div>
+  );
+};

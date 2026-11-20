@@ -1,0 +1,144 @@
+import React, { useEffect, useRef, useState } from 'react';
+import { Settings } from 'lucide-react';
+import type { ProjectAppearance } from '../../domain/types';
+import { DEFAULT_DARK_BG, DEFAULT_LIGHT_BG } from '../../domain/project';
+import { normalizeHex } from '../../domain/validate';
+import type { I18nDict, Language } from '../../i18n';
+
+interface SettingsPopoverProps {
+  appearance: ProjectAppearance;
+  language: Language;
+  dict: I18nDict;
+  onChangeAppearance: (next: ProjectAppearance) => void;
+  onChangeLanguage: (lang: Language) => void;
+}
+
+export const SettingsPopover: React.FC<SettingsPopoverProps> = ({
+  appearance,
+  language,
+  dict,
+  onChangeAppearance,
+  onChangeLanguage,
+}) => {
+  const [open, setOpen] = useState(false);
+  const [hexValue, setHexValue] = useState(appearance.background);
+  const ref = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    setHexValue(appearance.background);
+  }, [appearance.background]);
+
+  useEffect(() => {
+    if (!open) return;
+    const onDown = (e: MouseEvent) => {
+      if (!ref.current?.contains(e.target as Node)) setOpen(false);
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setOpen(false);
+    };
+    window.addEventListener('mousedown', onDown);
+    window.addEventListener('keydown', onKey);
+    return () => {
+      window.removeEventListener('mousedown', onDown);
+      window.removeEventListener('keydown', onKey);
+    };
+  }, [open]);
+
+  const applyHex = (raw: string) => {
+    setHexValue(raw);
+    const norm = normalizeHex(raw);
+    if (norm) {
+      onChangeAppearance({ ...appearance, background: norm });
+    }
+  };
+
+  return (
+    <div ref={ref} className="popover-anchor">
+      <button
+        type="button"
+        className={`icon-btn ${open ? 'is-active' : ''}`}
+        title={dict.settings}
+        aria-label={dict.settings}
+        aria-expanded={open}
+        onClick={() => setOpen((v) => !v)}
+      >
+        <Settings size={17} />
+      </button>
+
+      {open && (
+        <div className="popover-panel popover-panel--right settings-popover">
+          <div className="popover-section-label">{dict.appearanceTitle}</div>
+
+          <div className="preset-grid">
+            <button
+              type="button"
+              className={`preset-btn ${appearance.background.toUpperCase() === DEFAULT_LIGHT_BG ? 'is-active' : ''}`}
+              onClick={() => onChangeAppearance({ ...appearance, background: DEFAULT_LIGHT_BG })}
+            >
+              <span className="preset-swatch" style={{ background: DEFAULT_LIGHT_BG }} />
+              <span>{dict.bgPresetLight}</span>
+            </button>
+            <button
+              type="button"
+              className={`preset-btn ${appearance.background.toUpperCase() === DEFAULT_DARK_BG ? 'is-active' : ''}`}
+              onClick={() => onChangeAppearance({ ...appearance, background: DEFAULT_DARK_BG })}
+            >
+              <span className="preset-swatch" style={{ background: DEFAULT_DARK_BG }} />
+              <span>{dict.bgPresetDark}</span>
+            </button>
+          </div>
+
+          <label className="field">
+            <span className="field-label">{dict.bgCustomHex}</span>
+            <div className="hex-input-row">
+              <input
+                type="color"
+                className="color-picker-native"
+                value={normalizeHex(hexValue) ?? DEFAULT_LIGHT_BG}
+                onChange={(e) => applyHex(e.target.value)}
+              />
+              <input
+                className="input-sm mono"
+                value={hexValue}
+                onChange={(e) => applyHex(e.target.value)}
+              />
+            </div>
+          </label>
+
+          <label className="toggle-row">
+            <span>{dict.dotGrid}</span>
+            <input
+              type="checkbox"
+              checked={appearance.dots}
+              onChange={(e) => onChangeAppearance({ ...appearance, dots: e.target.checked })}
+            />
+          </label>
+
+          <div className="popover-divider" />
+
+          <div className="field">
+            <span className="field-label">{dict.languageLabel}</span>
+            <div className="seg-control">
+              <button
+                type="button"
+                className={`seg-btn ${language === 'vi' ? 'is-active' : ''}`}
+                onClick={() => onChangeLanguage('vi')}
+              >
+                Tiếng Việt
+              </button>
+              <button
+                type="button"
+                className={`seg-btn ${language === 'en' ? 'is-active' : ''}`}
+                onClick={() => onChangeLanguage('en')}
+              >
+                English
+              </button>
+            </div>
+          </div>
+
+          <p className="field-hint">{dict.storageNote}</p>
+        </div>
+      )}
+    </div>
+  );
+};
