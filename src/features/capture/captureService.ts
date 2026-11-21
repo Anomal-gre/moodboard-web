@@ -2,18 +2,25 @@ import type { CaptureMethod, Card } from '../../domain/types';
 import type { Point } from '../../domain/geometry';
 import {
   createId,
+  extractFileExtension,
   extractHostname,
-  isDesignFileName,
+  extractInlineSvg,
+  inferFileCategory,
+  isBrowserRenderableImage,
   isValidHttpUrl,
   looksLikeImageUrl,
+  normalizeDashes,
   parseDroppedHtml,
 } from '../../domain/validate';
-import { putImageAsset } from '../../storage/workspaceRepository';
+import { extractDominantHexFromBlob } from '../../domain/paletteExtract';
+import { putImageAsset, putRawFileAsset } from '../../storage/workspaceRepository';
 
 export interface CaptureBatchResult {
   cards: Card[];
   errors: string[];
 }
+
+const MAX_STORED_FILE_BYTES = 150 * 1024 * 1024; // 150 MB
 
 function fitInitialImageSize(width: number, height: number): { w: number; h: number } {
   const maxW = 300;
@@ -33,6 +40,61 @@ function stripExtension(name: string): string {
   return idx > 0 ? name.slice(0, idx) : name;
 }
 
+async function createUniversalFileCard(
+  file: File,
+  offsetIdx: number,
+  opts: {
+    inbox: boolean;
+    worldPoint: Point;
+    baseZ: number;
+    method: CaptureMethod;
+  }
+): Promise<Card> {
+  const now = new Date().toISOString();
+  const extension = extractFileExtension(file.name);
+  const localPath = (file as File & { path?: string }).path;
+  let assetId: string | undefined;
+
+  if (file.size > 0 && file.size <= MAX_STORED_FILE_BYTES) {
+    try {
+      const meta = await putRawFileAsset(file, file.name);
+      assetId = meta.id;
+    } catch {
+      // Keep card working even if IndexedDB quota is tight
+    }
+  }
+
+  return {
+    id: createId('crd'),
+    kind: 'file',
+    title: normalizeDashes(file.name),
+    text: '',
+    category: inferFileCategory(extension),
+    x: Math.round(opts.worldPoint.x + (offsetIdx % 3) * 32),
+    y: Math.round(opts.worldPoint.y + Math.floor(offsetIdx / 3) * 96 + (offsetIdx % 3) * 24),
+    w: 276,
+    h: 88,
+    z: opts.baseZ + offsetIdx,
+    inbox: opts.inbox,
+    locked: false,
+    assetId,
+    designFile: {
+      extension,
+      size: file.size,
+      mime: file.type || undefined,
+      localPath,
+    },
+    source: {
+      fileName: normalizeDashes(file.name),
+      localPath,
+      method: opts.method,
+      capturedAt: now,
+    },
+    createdAt: now,
+    updatedAt: now,
+  };
+}
+
 export async function importFilesAsCards(
   files: File[],
   opts: {
@@ -48,65 +110,51 @@ export async function importFilesAsCards(
 
   for (const file of files) {
     const now = new Date().toISOString();
-    const { isDesign, extension } = isDesignFileName(file.name);
+    const localPath = (file as File & { path?: string }).path;
 
-    if (isDesign) {
-      cards.push({
-        id: createId('crd'),
-        kind: 'file',
-        title: file.name,
-        text: '',
-        category: extension === 'dwg' || extension === 'dxf' || extension === 'skp' ? 'sketch' : 'other',
-        x: Math.round(opts.worldPoint.x + offsetIdx * 28),
-        y: Math.round(opts.worldPoint.y + offsetIdx * 28),
-        w: 268,
-        h: 86,
-        z: opts.baseZ + offsetIdx,
-        inbox: opts.inbox,
-        locked: false,
-        designFile: { extension, size: file.size },
-        source: {
-          fileName: file.name,
-          method: opts.method,
-          capturedAt: now,
-        },
-        createdAt: now,
-        updatedAt: now,
-      });
-      offsetIdx++;
-      continue;
+    if (isBrowserRenderableImage(file.name, file.type)) {
+      try {
+        const [meta, dominantHex] = await Promise.all([
+          putImageAsset(file, file.name),
+          extractDominantHexFromBlob(file),
+        ]);
+        const { w, h } = fitInitialImageSize(meta.width, meta.height);
+        cards.push({
+          id: createId('crd'),
+          kind: 'image',
+          title: normalizeDashes(stripExtension(file.name)) || 'Image',
+          text: '',
+          category: 'other',
+          dominantHex,
+          x: Math.round(opts.worldPoint.x + (offsetIdx % 4) * 32),
+          y: Math.round(opts.worldPoint.y + Math.floor(offsetIdx / 4) * 32 + (offsetIdx % 4) * 20),
+          w,
+          h,
+          z: opts.baseZ + offsetIdx,
+          inbox: opts.inbox,
+          locked: false,
+          assetId: meta.id,
+          imageStatus: 'ready',
+          source: {
+            fileName: normalizeDashes(file.name),
+            localPath,
+            method: opts.method,
+            capturedAt: now,
+          },
+          createdAt: now,
+          updatedAt: now,
+        });
+        offsetIdx++;
+        continue;
+      } catch {
+        // Fallback: if browser cannot decode image (e.g. CMYK or special codec), import as File card
+      }
     }
 
-    // Attempt image decoding for image files or unknown extensions
+    // Any other file extension (.pdf, .docx, .xlsx, .dwg, .psd, .skp, .zip, .mp4, etc.) -> File Card
     try {
-      if (file.type && !file.type.startsWith('image/')) {
-        throw new Error(`Không hỗ trợ định dạng tệp (${file.type}).`);
-      }
-      const meta = await putImageAsset(file, file.name);
-      const { w, h } = fitInitialImageSize(meta.width, meta.height);
-      cards.push({
-        id: createId('crd'),
-        kind: 'image',
-        title: stripExtension(file.name) || 'Ảnh mới',
-        text: '',
-        category: 'other',
-        x: Math.round(opts.worldPoint.x + (offsetIdx % 4) * 32),
-        y: Math.round(opts.worldPoint.y + Math.floor(offsetIdx / 4) * 32 + (offsetIdx % 4) * 20),
-        w,
-        h,
-        z: opts.baseZ + offsetIdx,
-        inbox: opts.inbox,
-        locked: false,
-        assetId: meta.id,
-        imageStatus: 'ready',
-        source: {
-          fileName: file.name,
-          method: opts.method,
-          capturedAt: now,
-        },
-        createdAt: now,
-        updatedAt: now,
-      });
+      const fileCard = await createUniversalFileCard(file, offsetIdx, opts);
+      cards.push(fileCard);
       offsetIdx++;
     } catch (err) {
       const reason = err instanceof Error ? err.message : 'Lỗi đọc tệp.';
@@ -141,17 +189,20 @@ export async function importUrlAsCard(
   const isLikelyImg = opts.tryAsImage || looksLikeImageUrl(trimmed);
 
   if (isLikelyImg && opts.tryAsImage) {
-    // Try fetching image bytes (may fail due to CORS or auth — fall back safely)
+    // 1. Try fetching image bytes cleanly with no-referrer (supports Pinterest i.pinimg.com & many CDNs)
     try {
-      const resp = await fetch(trimmed, { mode: 'cors' });
+      const resp = await fetch(trimmed, { mode: 'cors', referrerPolicy: 'no-referrer' });
       if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
       const contentType = resp.headers.get('content-type') || '';
-      if (!contentType.startsWith('image/')) {
+      if (contentType && !contentType.startsWith('image/') && !contentType.includes('octet-stream')) {
         throw new Error('URL không trả về dữ liệu ảnh trực tiếp.');
       }
       const blob = await resp.blob();
       const fileName = opts.title || extractHostname(trimmed);
-      const meta = await putImageAsset(blob, fileName);
+      const [meta, dominantHex] = await Promise.all([
+        putImageAsset(blob, fileName),
+        extractDominantHexFromBlob(blob),
+      ]);
       const { w, h } = fitInitialImageSize(meta.width, meta.height);
 
       const pageUrl =
@@ -164,9 +215,10 @@ export async function importUrlAsCard(
           {
             id: createId('crd'),
             kind: 'image',
-            title: opts.title?.trim() || extractHostname(trimmed),
+            title: normalizeDashes(opts.title?.trim() || extractHostname(trimmed)),
             text: '',
             category: 'other',
+            dominantHex,
             x: Math.round(opts.worldPoint.x),
             y: Math.round(opts.worldPoint.y),
             w,
@@ -189,7 +241,22 @@ export async function importUrlAsCard(
         errors: [],
       };
     } catch {
-      // Fallback: create remote-only image card keeping URL intact so user can Replace Image (W08)
+      // 2. CORS blocked fetch(): probe real natural dimensions via <img> with no-referrer so tall pins keep true aspect ratio!
+      const probedSize = await new Promise<{ w: number; h: number }>((resolve) => {
+        const img = new Image();
+        img.referrerPolicy = 'no-referrer';
+        const timeout = window.setTimeout(() => resolve({ w: 260, h: 196 }), 3000);
+        img.onload = () => {
+          window.clearTimeout(timeout);
+          resolve(fitInitialImageSize(img.naturalWidth, img.naturalHeight));
+        };
+        img.onerror = () => {
+          window.clearTimeout(timeout);
+          resolve({ w: 260, h: 196 });
+        };
+        img.src = trimmed;
+      });
+
       const pageUrl =
         opts.pageUrl && isValidHttpUrl(opts.pageUrl) && opts.pageUrl !== trimmed
           ? opts.pageUrl
@@ -200,13 +267,13 @@ export async function importUrlAsCard(
           {
             id: createId('crd'),
             kind: 'image',
-            title: opts.title?.trim() || extractHostname(trimmed),
+            title: normalizeDashes(opts.title?.trim() || extractHostname(trimmed)),
             text: '',
             category: 'other',
             x: Math.round(opts.worldPoint.x),
             y: Math.round(opts.worldPoint.y),
-            w: 260,
-            h: 196,
+            w: probedSize.w,
+            h: probedSize.h,
             z: opts.baseZ,
             inbox: opts.inbox,
             locked: false,
@@ -226,13 +293,12 @@ export async function importUrlAsCard(
     }
   }
 
-  // Standard link card (preserves pageUrl cleanly without forcing remote image fetch)
   return {
     cards: [
       {
         id: createId('crd'),
         kind: 'link',
-        title: opts.title?.trim() || extractHostname(trimmed),
+        title: normalizeDashes(opts.title?.trim() || extractHostname(trimmed)),
         text: '',
         category: 'reference',
         x: Math.round(opts.worldPoint.x),
@@ -255,6 +321,65 @@ export async function importUrlAsCard(
   };
 }
 
+export async function importInlineSvgAsCard(
+  svgMarkup: string,
+  opts: {
+    title?: string;
+    inbox: boolean;
+    worldPoint: Point;
+    baseZ: number;
+    method: CaptureMethod;
+  }
+): Promise<CaptureBatchResult> {
+  const fileName = `${opts.title || 'Illustrator-Vector'}.svg`;
+  const svgFile = new File([svgMarkup], fileName, { type: 'image/svg+xml' });
+  return importFilesAsCards([svgFile], {
+    inbox: opts.inbox,
+    worldPoint: opts.worldPoint,
+    baseZ: opts.baseZ,
+    method: opts.method,
+  });
+}
+
+export async function importDataUrlAsCard(
+  dataUrl: string,
+  opts: {
+    title?: string;
+    pageUrl?: string;
+    inbox: boolean;
+    worldPoint: Point;
+    baseZ: number;
+    method: CaptureMethod;
+  }
+): Promise<CaptureBatchResult> {
+  try {
+    const resp = await fetch(dataUrl);
+    const blob = await resp.blob();
+    const ext = (blob.type.split('/')[1] || 'png').replace('svg+xml', 'svg');
+    const file = new File([blob], `${opts.title || 'Canva-Graphic'}.${ext}`, {
+      type: blob.type || 'image/png',
+    });
+    const res = await importFilesAsCards([file], {
+      inbox: opts.inbox,
+      worldPoint: opts.worldPoint,
+      baseZ: opts.baseZ,
+      method: opts.method,
+    });
+    if (res.cards[0] && opts.pageUrl) {
+      res.cards[0].source = {
+        ...res.cards[0].source!,
+        pageUrl: opts.pageUrl,
+      };
+    }
+    return res;
+  } catch (err) {
+    return {
+      cards: [],
+      errors: [err instanceof Error ? err.message : 'Failed to decode dropped image.'],
+    };
+  }
+}
+
 export async function importWebDropData(
   dt: DataTransfer,
   opts: {
@@ -268,7 +393,7 @@ export async function importWebDropData(
   const plain = dt.getData('text/plain').trim();
   const parsedHtml = html ? parseDroppedHtml(html) : {};
 
-  // 1. Real files dropped (from OS folder or browser carrying image bytes)
+  // 1. Real files dropped (from OS folder, Photoshop/Illustrator export, or browser carrying file bytes)
   if (dt.files && dt.files.length > 0) {
     const fileArr = Array.from(dt.files);
     const result = await importFilesAsCards(fileArr, {
@@ -277,7 +402,6 @@ export async function importWebDropData(
       baseZ: opts.baseZ,
       method: parsedHtml.imageUrl || parsedHtml.pageUrl ? 'web-drop' : 'folder-drop',
     });
-    // Attach parsed web source metadata if drag came from a web page
     if (result.cards.length === 1 && (parsedHtml.imageUrl || parsedHtml.pageUrl)) {
       const c = result.cards[0];
       c.source = {
@@ -288,13 +412,36 @@ export async function importWebDropData(
         capturedAt: c.source?.capturedAt || new Date().toISOString(),
       };
       if (parsedHtml.alt && (!c.title || c.title === 'image')) {
-        c.title = parsedHtml.alt.slice(0, 80);
+        c.title = normalizeDashes(parsedHtml.alt.slice(0, 80));
       }
     }
     return result;
   }
 
-  // 2. HTML image drag from another browser tab (e.g., Pinterest)
+  // 2. Data URL or Inline SVG dropped from Canva / Illustrator / Figma
+  if (parsedHtml.dataUrl) {
+    return importDataUrlAsCard(parsedHtml.dataUrl, {
+      title: parsedHtml.alt,
+      pageUrl: parsedHtml.pageUrl,
+      inbox: opts.inbox,
+      worldPoint: opts.worldPoint,
+      baseZ: opts.baseZ,
+      method: 'web-drop',
+    });
+  }
+
+  const inlineSvg = parsedHtml.inlineSvg || extractInlineSvg(plain);
+  if (inlineSvg) {
+    return importInlineSvgAsCard(inlineSvg, {
+      title: parsedHtml.alt || 'Vector SVG',
+      inbox: opts.inbox,
+      worldPoint: opts.worldPoint,
+      baseZ: opts.baseZ,
+      method: 'web-drop',
+    });
+  }
+
+  // 3. HTML image drag from another browser tab (Canva / Pinterest / Behance)
   if (parsedHtml.imageUrl) {
     return importUrlAsCard(parsedHtml.imageUrl, {
       title: parsedHtml.alt,
@@ -307,12 +454,21 @@ export async function importWebDropData(
     });
   }
 
-  // 3. URI list or plain URL
+  // 4. URI list or plain URL (including data:image/... URI)
   const firstUri =
     uriList
       .split(/\r?\n/)
       .map((l) => l.trim())
       .find((l) => l && !l.startsWith('#')) || plain;
+
+  if (firstUri && firstUri.startsWith('data:image/')) {
+    return importDataUrlAsCard(firstUri, {
+      inbox: opts.inbox,
+      worldPoint: opts.worldPoint,
+      baseZ: opts.baseZ,
+      method: 'web-drop',
+    });
+  }
 
   if (firstUri && isValidHttpUrl(firstUri)) {
     const asImage = looksLikeImageUrl(firstUri);
@@ -326,7 +482,7 @@ export async function importWebDropData(
     });
   }
 
-  // 4. Plain text dropped -> create note card
+  // 5. Plain text dropped -> create note card
   if (plain) {
     const now = new Date().toISOString();
     return {
@@ -335,7 +491,7 @@ export async function importWebDropData(
           id: createId('crd'),
           kind: 'note',
           title: 'Ghi chú',
-          text: plain.slice(0, 2000),
+          text: normalizeDashes(plain.slice(0, 2000)),
           color: '#FAF7EE',
           category: 'other',
           x: Math.round(opts.worldPoint.x),
@@ -362,4 +518,27 @@ export async function replaceCardImageFile(
 ): Promise<{ assetId: string; width: number; height: number }> {
   const meta = await putImageAsset(file, file.name);
   return { assetId: meta.id, width: meta.width, height: meta.height };
+}
+
+export async function replaceCardRawFile(
+  file: File
+): Promise<{
+  assetId: string;
+  extension: string;
+  size: number;
+  mime?: string;
+  fileName: string;
+  localPath?: string;
+}> {
+  const meta = await putRawFileAsset(file, file.name);
+  const extension = extractFileExtension(file.name);
+  const localPath = (file as File & { path?: string }).path;
+  return {
+    assetId: meta.id,
+    extension,
+    size: file.size,
+    mime: file.type || undefined,
+    fileName: normalizeDashes(file.name),
+    localPath,
+  };
 }

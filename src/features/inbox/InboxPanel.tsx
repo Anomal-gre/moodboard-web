@@ -5,6 +5,7 @@ import {
   FileCode2,
   Inbox,
   Link2,
+  Puzzle,
   StickyNote,
   Trash2,
 } from 'lucide-react';
@@ -15,6 +16,7 @@ import { resolveAssetUrl } from '../../storage/workspaceRepository';
 interface InboxPanelProps {
   open: boolean;
   inboxCards: Card[];
+  clipperBridgeReady?: boolean;
   dict: I18nDict;
   onToggle: () => void;
   onMoveToBoard: (cardId: string) => void;
@@ -28,16 +30,25 @@ const InboxThumb: React.FC<{ card: Card }> = ({ card }) => {
     let alive = true;
     if (card.kind === 'image' && card.assetId) {
       resolveAssetUrl(card.assetId, 'thumb').then((u) => {
-        if (alive) setUrl(u);
+        if (alive) setUrl(u || card.source?.imageUrl || null);
       });
+    } else if (card.kind === 'image' && card.source?.imageUrl) {
+      setUrl(card.source.imageUrl);
     }
     return () => {
       alive = false;
     };
-  }, [card.kind, card.assetId]);
+  }, [card.kind, card.assetId, card.source?.imageUrl]);
 
   if (card.kind === 'image' && url) {
-    return <img src={url} alt={card.title} className="inbox-thumb-img" />;
+    return (
+      <img
+        src={url}
+        alt={card.title}
+        referrerPolicy="no-referrer"
+        className="inbox-thumb-img"
+      />
+    );
   }
   if (card.kind === 'color') {
     return <div className="inbox-thumb-color" style={{ backgroundColor: card.color || '#8D9A7C' }} />;
@@ -66,6 +77,7 @@ const InboxThumb: React.FC<{ card: Card }> = ({ card }) => {
 export const InboxPanel: React.FC<InboxPanelProps> = ({
   open,
   inboxCards,
+  clipperBridgeReady,
   dict,
   onToggle,
   onMoveToBoard,
@@ -73,6 +85,7 @@ export const InboxPanel: React.FC<InboxPanelProps> = ({
   onDropExternalToInbox,
 }) => {
   const [dragOver, setDragOver] = useState(false);
+  const [clipperGuideOpen, setClipperGuideOpen] = useState(false);
 
   return (
     <div className="inbox-anchor">
@@ -158,6 +171,31 @@ export const InboxPanel: React.FC<InboxPanelProps> = ({
                   </div>
                 </div>
               ))}
+            </div>
+          )}
+
+          {clipperBridgeReady && (
+            <div className="inbox-clipper-footer">
+              <button
+                type="button"
+                className="inbox-clipper-toggle"
+                aria-expanded={clipperGuideOpen}
+                onClick={() => setClipperGuideOpen((v) => !v)}
+              >
+                <span className="clipper-status-dot" />
+                <Puzzle size={13} />
+                <span className="truncate">{dict.clipperBadgeConnected}</span>
+                <ChevronDown
+                  size={13}
+                  className={`disclosure-chevron ${clipperGuideOpen ? 'is-open' : ''}`}
+                />
+              </button>
+              {clipperGuideOpen && (
+                <div className="inbox-clipper-guide">
+                  <strong>{dict.clipperGuideTitle}</strong>
+                  <p>{dict.clipperGuideSteps}</p>
+                </div>
+              )}
             </div>
           )}
         </aside>

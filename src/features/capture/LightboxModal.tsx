@@ -16,17 +16,21 @@ export const LightboxModal: React.FC<LightboxModalProps> = ({ card, dict, onClos
 
   useEffect(() => {
     let alive = true;
-    if (!card?.assetId) {
+    if (!card) {
       setUrl(null);
       return;
     }
+    if (!card.assetId) {
+      setUrl(card.source?.imageUrl || null);
+      return;
+    }
     resolveAssetUrl(card.assetId, 'full').then((u) => {
-      if (alive) setUrl(u);
+      if (alive) setUrl(u || card.source?.imageUrl || null);
     });
     return () => {
       alive = false;
     };
-  }, [card?.assetId]);
+  }, [card]);
 
   return (
     <DialogShell
@@ -56,7 +60,13 @@ export const LightboxModal: React.FC<LightboxModalProps> = ({ card, dict, onClos
     >
       <div className="lightbox-stage">
         {url ? (
-          <img src={url} alt={card?.title || ''} className="lightbox-img" />
+          <img
+            src={url}
+            alt={card?.title || ''}
+            className="lightbox-img"
+            referrerPolicy="no-referrer"
+            style={card?.flipH ? { transform: 'scaleX(-1)' } : undefined}
+          />
         ) : (
           <div className="field-hint">{dict.imageMissingBadge}</div>
         )}

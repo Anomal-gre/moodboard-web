@@ -1,26 +1,33 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Settings } from 'lucide-react';
+import { FolderSync, Settings } from 'lucide-react';
 import type { ProjectAppearance } from '../../domain/types';
 import { DEFAULT_DARK_BG, DEFAULT_LIGHT_BG } from '../../domain/project';
 import { normalizeHex } from '../../domain/validate';
 import type { I18nDict, Language } from '../../i18n';
 
 interface SettingsPopoverProps {
+  open: boolean;
+  onOpenChange: (nextOpen: boolean) => void;
   appearance: ProjectAppearance;
   language: Language;
+  syncFolderName?: string | null;
   dict: I18nDict;
   onChangeAppearance: (next: ProjectAppearance) => void;
   onChangeLanguage: (lang: Language) => void;
+  onOpenStorageHub: () => void;
 }
 
 export const SettingsPopover: React.FC<SettingsPopoverProps> = ({
+  open,
+  onOpenChange,
   appearance,
   language,
+  syncFolderName,
   dict,
   onChangeAppearance,
   onChangeLanguage,
+  onOpenStorageHub,
 }) => {
-  const [open, setOpen] = useState(false);
   const [hexValue, setHexValue] = useState(appearance.background);
   const ref = useRef<HTMLDivElement | null>(null);
 
@@ -31,10 +38,10 @@ export const SettingsPopover: React.FC<SettingsPopoverProps> = ({
   useEffect(() => {
     if (!open) return;
     const onDown = (e: MouseEvent) => {
-      if (!ref.current?.contains(e.target as Node)) setOpen(false);
+      if (!ref.current?.contains(e.target as Node)) onOpenChange(false);
     };
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') setOpen(false);
+      if (e.key === 'Escape') onOpenChange(false);
     };
     window.addEventListener('mousedown', onDown);
     window.addEventListener('keydown', onKey);
@@ -42,7 +49,7 @@ export const SettingsPopover: React.FC<SettingsPopoverProps> = ({
       window.removeEventListener('mousedown', onDown);
       window.removeEventListener('keydown', onKey);
     };
-  }, [open]);
+  }, [open, onOpenChange]);
 
   const applyHex = (raw: string) => {
     setHexValue(raw);
@@ -60,7 +67,7 @@ export const SettingsPopover: React.FC<SettingsPopoverProps> = ({
         title={dict.settings}
         aria-label={dict.settings}
         aria-expanded={open}
-        onClick={() => setOpen((v) => !v)}
+        onClick={() => onOpenChange(!open)}
       >
         <Settings size={17} />
       </button>
@@ -114,6 +121,15 @@ export const SettingsPopover: React.FC<SettingsPopoverProps> = ({
             />
           </label>
 
+          <label className="toggle-row">
+            <span>{dict.grayscaleMode}</span>
+            <input
+              type="checkbox"
+              checked={Boolean(appearance.grayscale)}
+              onChange={(e) => onChangeAppearance({ ...appearance, grayscale: e.target.checked })}
+            />
+          </label>
+
           <div className="popover-divider" />
 
           <div className="field">
@@ -135,6 +151,24 @@ export const SettingsPopover: React.FC<SettingsPopoverProps> = ({
               </button>
             </div>
           </div>
+
+          <div className="popover-divider" />
+
+          <button
+            type="button"
+            className="popover-action-btn"
+            onClick={() => {
+              onOpenChange(false);
+              onOpenStorageHub();
+            }}
+          >
+            <FolderSync size={15} />
+            <span className="truncate">
+              {syncFolderName
+                ? dict.folderSyncConnected(syncFolderName)
+                : dict.storageHubTitle}
+            </span>
+          </button>
 
           <p className="field-hint">{dict.storageNote}</p>
         </div>

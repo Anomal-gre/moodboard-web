@@ -24,7 +24,14 @@ export interface WorkerClassifyMessage {
   mime: string;
 }
 
-export type WorkerInboundMessage = WorkerStartMessage | WorkerClassifyMessage;
+export interface WorkerDisposeMessage {
+  type: 'dispose';
+}
+
+export type WorkerInboundMessage =
+  | WorkerStartMessage
+  | WorkerClassifyMessage
+  | WorkerDisposeMessage;
 
 export type WorkerOutboundMessage =
   | { type: 'ready'; requestId: string; fromCache: boolean }
@@ -40,10 +47,12 @@ export type WorkerOutboundMessage =
   | { type: 'image-error'; requestId: string; cardId: string; reason: string }
   | { type: 'fatal'; requestId: string; reason: string };
 
-type ZeroShotClassifier = (
+type ZeroShotClassifier = ((
   image: RawImage,
   candidateLabels: string[]
-) => Promise<Array<{ label: string; score: number }>>;
+) => Promise<Array<{ label: string; score: number }>>) & {
+  dispose?: () => Promise<void>;
+};
 
 let classifier: ZeroShotClassifier | null = null;
 let loadedModelId: string | null = null;
@@ -53,6 +62,23 @@ let candidateList: string[] = [];
 
 self.onmessage = async (event: MessageEvent<WorkerInboundMessage>) => {
   const msg = event.data;
+
+  if (msg.type === 'dispose') {
+    try {
+      if (classifier && typeof classifier.dispose === 'function') {
+        await classifier.dispose();
+      }
+    } catch {
+      // ignore
+    } finally {
+      classifier = null;
+      loadedModelId = null;
+      activePrompts = null;
+      promptToCategory.clear();
+      candidateList = [];
+    }
+    return;
+  }
 
   if (msg.type === 'start') {
     const { requestId, modelConfig, labelPrompts } = msg;
@@ -84,7 +110,7 @@ self.onmessage = async (event: MessageEvent<WorkerInboundMessage>) => {
                   typeof info.progress === 'number' ? Math.round(info.progress) : undefined;
                 const detail = info.file
                   ? `${info.file}${pct !== undefined ? ` (${pct}%)` : ''}`
-                  : 'Đang tải tệp mô hình…';
+                  : 'Đang tải tệp mô hình...';
                 self.postMessage({
                   type: 'downloading',
                   requestId,

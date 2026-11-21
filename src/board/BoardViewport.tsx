@@ -1,7 +1,14 @@
 import React, { useMemo, useState } from 'react';
-import { ImagePlus } from 'lucide-react';
+import { ImagePlus, Move, MoveUpRight } from 'lucide-react';
 import type { Card, ProjectAppearance, ProjectView } from '../domain/types';
-import { rectsIntersect, screenToWorld, type Point, type Rect } from '../domain/geometry';
+import {
+  computeConnectorCurve,
+  computeConnectorToPoint,
+  rectsIntersect,
+  screenToWorld,
+  type Point,
+  type Rect,
+} from '../domain/geometry';
 import { isDarkColor } from '../domain/validate';
 import type { I18nDict } from '../i18n';
 import { CardView } from './CardView';
@@ -15,8 +22,14 @@ interface BoardViewportProps {
   view: ProjectView;
   selectedIds: string[];
   editingCardId: string | null;
+  croppingCardId: string | null;
   highlightedCardId: string | null;
+  dimmedCardIds: Set<string> | null;
+  connectMode: boolean;
+  connectSourceId: string | null;
+  connectCursorWorld: Point | null;
   presentMode: boolean;
+  isArranging: boolean;
   spacePressed: boolean;
   draft: DragDraft | null;
   dict: I18nDict;
@@ -25,19 +38,25 @@ interface BoardViewportProps {
   onPointerUp: (e: React.PointerEvent<HTMLDivElement>) => void;
   onPointerCancel: () => void;
   onDoubleClick: (e: React.MouseEvent<HTMLDivElement>) => void;
+  onBoardContextMenu: (e: React.MouseEvent<HTMLDivElement>, worldPoint: Point) => void;
   onCardPointerDown: (e: React.PointerEvent, card: Card) => void;
   onCardDoubleClick: (e: React.MouseEvent, card: Card) => void;
+  onCardContextMenu: (e: React.MouseEvent, card: Card) => void;
   onResizePointerDown: (e: React.PointerEvent, card: Card) => void;
   onUpdateCardText: (cardId: string, text: string) => void;
+  onChangeCrop: (cardId: string, crop: { x: number; y: number; w: number; h: number }) => void;
+  onFinishCrop: () => void;
   onFinishEdit: () => void;
+  onRemoveConnector: (srcId: string, dstId: string) => void;
   onOpenLightbox: (card: Card) => void;
+  onOpenFileCard: (card: Card) => void;
   onTriggerReplaceImage: (card: Card) => void;
   onTriggerAddImage: () => void;
   onDropExternal: (dt: DataTransfer, worldPoint: Point) => void;
   onDropInboxCard: (cardId: string, worldPoint: Point) => void;
 }
 
-const VIRTUAL_PADDING_SCREEN = 300;
+const VIRTUAL_PADDING_SCREEN = 320;
 
 export const BoardViewport: React.FC<BoardViewportProps> = ({
   boardRef,
@@ -47,8 +66,14 @@ export const BoardViewport: React.FC<BoardViewportProps> = ({
   view,
   selectedIds,
   editingCardId,
+  croppingCardId,
   highlightedCardId,
+  dimmedCardIds,
+  connectMode,
+  connectSourceId,
+  connectCursorWorld,
   presentMode,
+  isArranging,
   spacePressed,
   draft,
   dict,
@@ -57,12 +82,18 @@ export const BoardViewport: React.FC<BoardViewportProps> = ({
   onPointerUp,
   onPointerCancel,
   onDoubleClick,
+  onBoardContextMenu,
   onCardPointerDown,
   onCardDoubleClick,
+  onCardContextMenu,
   onResizePointerDown,
   onUpdateCardText,
+  onChangeCrop,
+  onFinishCrop,
   onFinishEdit,
+  onRemoveConnector,
   onOpenLightbox,
+  onOpenFileCard,
   onTriggerReplaceImage,
   onTriggerAddImage,
   onDropExternal,
@@ -73,7 +104,6 @@ export const BoardViewport: React.FC<BoardViewportProps> = ({
   const selectedSet = useMemo(() => new Set(selectedIds), [selectedIds]);
   const boardCards = useMemo(() => cards.filter((c) => !c.inbox), [cards]);
 
-  // Viewport culling with 300px screen buffer (Spec Section 6 & W23)
   const visibleCards = useMemo(() => {
     const padWorld = VIRTUAL_PADDING_SCREEN / Math.max(0.1, view.zoom);
     const topLeft = screenToWorld({ x: 0, y: 0 }, view);
@@ -100,8 +130,10 @@ export const BoardViewport: React.FC<BoardViewportProps> = ({
   }, [boardCards, draft, editingCardId, highlightedCardId, selectedSet, view, viewportSize]);
 
   const darkBg = isDarkColor(appearance.background);
-  const dotSpacing = Math.max(16, Math.round(27 * view.zoom));
-  const dotColor = darkBg ? 'rgba(255, 255, 255, 0.14)' : 'rgba(48, 58, 49, 0.18)';
+  const dotSpacing = Math.max(16, Math.round(26 * view.zoom));
+  const dotColor = darkBg ? 'rgba(255, 255, 255, 0.13)' : 'rgba(60, 60, 67, 0.16)';
+
+  const isStickyMoving = draft?.mode === 'sticky-move';
 
   const viewportStyle: React.CSSProperties = {
     backgroundColor: appearance.background,
@@ -111,12 +143,15 @@ export const BoardViewport: React.FC<BoardViewportProps> = ({
         : 'none',
     backgroundSize: `${dotSpacing}px ${dotSpacing}px`,
     backgroundPosition: `${view.x % dotSpacing}px ${view.y % dotSpacing}px`,
-    cursor:
-      draft?.mode === 'pan'
-        ? 'grabbing'
-        : spacePressed || presentMode
-          ? 'grab'
-          : 'default',
+    cursor: connectMode
+      ? 'crosshair'
+      : isStickyMoving
+        ? 'move'
+        : draft?.mode === 'pan'
+          ? 'grabbing'
+          : spacePressed || presentMode
+            ? 'grab'
+            : 'default',
   };
 
   const handleDragOver = (e: React.DragEvent<HTMLDivElement>) => {
@@ -154,13 +189,23 @@ export const BoardViewport: React.FC<BoardViewportProps> = ({
     <div
       ref={boardRef}
       tabIndex={-1}
-      className={`board-viewport ${dragOver ? 'is-drag-over' : ''}`}
+      className={`board-viewport ${dragOver ? 'is-drag-over' : ''} ${isStickyMoving ? 'is-sticky-moving' : ''} ${connectMode ? 'is-connect-mode' : ''} ${appearance.grayscale ? 'is-grayscale' : ''}`}
       style={viewportStyle}
       onPointerDown={onPointerDown}
       onPointerMove={onPointerMove}
       onPointerUp={onPointerUp}
       onPointerCancel={onPointerCancel}
       onDoubleClick={onDoubleClick}
+      onContextMenu={(e) => {
+        e.preventDefault();
+        if (presentMode || isStickyMoving) return;
+        const rect = boardRef.current?.getBoundingClientRect();
+        const screenPt = rect
+          ? { x: e.clientX - rect.left, y: e.clientY - rect.top }
+          : { x: e.clientX, y: e.clientY };
+        const worldPt = screenToWorld(screenPt, view);
+        onBoardContextMenu(e, worldPt);
+      }}
       onDragOver={handleDragOver}
       onDragLeave={handleDragLeave}
       onDrop={handleDrop}
@@ -178,10 +223,25 @@ export const BoardViewport: React.FC<BoardViewportProps> = ({
           let displayW = card.w;
           let displayH = card.h;
 
-          if (draft?.mode === 'move' && draft.deltaWorld && draft.movableIds?.has(card.id)) {
+          const isCardMoving =
+            Boolean(
+              (draft?.mode === 'move' || draft?.mode === 'sticky-move') &&
+                draft.moved &&
+                draft.movableIds?.has(card.id)
+            );
+
+          if (
+            (draft?.mode === 'move' || draft?.mode === 'sticky-move') &&
+            draft.deltaWorld &&
+            draft.movableIds?.has(card.id)
+          ) {
             displayX += draft.deltaWorld.x;
             displayY += draft.deltaWorld.y;
-          } else if (draft?.mode === 'resize' && draft.resizeCardId === card.id && draft.nextRect) {
+          } else if (
+            draft?.mode === 'resize' &&
+            draft.resizeCardId === card.id &&
+            draft.nextRect
+          ) {
             displayW = draft.nextRect.w;
             displayH = draft.nextRect.h;
           }
@@ -194,22 +254,140 @@ export const BoardViewport: React.FC<BoardViewportProps> = ({
               displayY={displayY}
               displayW={displayW}
               displayH={displayH}
-              selected={selectedSet.has(card.id)}
-              singleSelected={selectedIds.length === 1 && selectedSet.has(card.id)}
+              selected={selectedSet.has(card.id) || connectSourceId === card.id}
+              singleSelected={!connectMode && selectedIds.length === 1 && selectedSet.has(card.id)}
               isEditing={editingCardId === card.id}
+              isCropping={croppingCardId === card.id}
               isHighlighted={highlightedCardId === card.id}
+              isDimmed={Boolean(dimmedCardIds?.has(card.id))}
+              isMoving={isCardMoving}
+              isArranging={isArranging}
               presentMode={presentMode}
               dict={dict}
               onPointerDown={onCardPointerDown}
               onDoubleClick={onCardDoubleClick}
+              onContextMenu={onCardContextMenu}
               onResizePointerDown={onResizePointerDown}
               onUpdateCardText={onUpdateCardText}
+              onChangeCrop={onChangeCrop}
+              onFinishCrop={onFinishCrop}
               onFinishEdit={onFinishEdit}
               onOpenLightbox={onOpenLightbox}
+              onOpenFileCard={onOpenFileCard}
               onTriggerReplaceImage={onTriggerReplaceImage}
             />
           );
         })}
+
+        {/* Milanote / FigJam Style Edge-to-Edge Curved Arrows Layer */}
+        {(boardCards.some((c) => c.linksTo && c.linksTo.length > 0) ||
+          (connectMode && connectSourceId && connectCursorWorld)) && (
+          <svg className="board-connectors-svg" aria-hidden="true">
+            <defs>
+              <marker
+                id="oy03-arrowhead"
+                markerWidth="10"
+                markerHeight="10"
+                refX="8.5"
+                refY="5"
+                orient="auto"
+                markerUnits="userSpaceOnUse"
+              >
+                <path d="M 1 1.4 L 9 5 L 1 8.6 L 2.8 5 Z" fill="var(--accent)" />
+              </marker>
+              <marker
+                id="oy03-arrowhead-danger"
+                markerWidth="10"
+                markerHeight="10"
+                refX="8.5"
+                refY="5"
+                orient="auto"
+                markerUnits="userSpaceOnUse"
+              >
+                <path d="M 1 1.4 L 9 5 L 1 8.6 L 2.8 5 Z" fill="#ef4444" />
+              </marker>
+            </defs>
+
+            {boardCards.map((src) => {
+              if (!src.linksTo || src.linksTo.length === 0) return null;
+              const srcRect: Rect = { x: src.x, y: src.y, w: src.w, h: src.h };
+              if (
+                (draft?.mode === 'move' || draft?.mode === 'sticky-move') &&
+                draft.deltaWorld &&
+                draft.movableIds?.has(src.id)
+              ) {
+                srcRect.x += draft.deltaWorld.x;
+                srcRect.y += draft.deltaWorld.y;
+              }
+              return src.linksTo.map((targetId) => {
+                const dst = boardCards.find((c) => c.id === targetId);
+                if (!dst) return null;
+                const dstRect: Rect = { x: dst.x, y: dst.y, w: dst.w, h: dst.h };
+                if (
+                  (draft?.mode === 'move' || draft?.mode === 'sticky-move') &&
+                  draft.deltaWorld &&
+                  draft.movableIds?.has(dst.id)
+                ) {
+                  dstRect.x += draft.deltaWorld.x;
+                  dstRect.y += draft.deltaWorld.y;
+                }
+                const curve = computeConnectorCurve(srcRect, dstRect);
+                return (
+                  <g
+                    key={`${src.id}->${dst.id}`}
+                    className="board-connector-group"
+                    onPointerDown={(e) => {
+                      if (presentMode) return;
+                      e.stopPropagation();
+                    }}
+                    onClick={(e) => {
+                      if (presentMode) return;
+                      e.stopPropagation();
+                      onRemoveConnector(src.id, dst.id);
+                    }}
+                  >
+                    <title>{dict.connectorClickDeleteHint}</title>
+                    <path d={curve.svgPath} className="board-connector-hit" />
+                    <path
+                      d={curve.svgPath}
+                      className="board-connector-path"
+                      markerEnd="url(#oy03-arrowhead)"
+                    />
+                    <circle cx={curve.sx} cy={curve.sy} r={3.5} className="board-connector-dot" />
+                  </g>
+                );
+              });
+            })}
+
+            {/* Live interactive preview arrow from source card to mouse cursor */}
+            {connectMode &&
+              connectSourceId &&
+              connectCursorWorld &&
+              (() => {
+                const src = boardCards.find((c) => c.id === connectSourceId);
+                if (!src) return null;
+                const previewCurve = computeConnectorToPoint(
+                  { x: src.x, y: src.y, w: src.w, h: src.h },
+                  connectCursorWorld
+                );
+                return (
+                  <g className="board-connector-preview">
+                    <path
+                      d={previewCurve.svgPath}
+                      className="board-connector-path board-connector-path--live"
+                      markerEnd="url(#oy03-arrowhead)"
+                    />
+                    <circle
+                      cx={previewCurve.sx}
+                      cy={previewCurve.sy}
+                      r={3.5}
+                      className="board-connector-dot"
+                    />
+                  </g>
+                );
+              })()}
+          </svg>
+        )}
 
         {/* Lasso selection box in world space */}
         {draft?.mode === 'lasso' && draft.moved && draft.lassoWorld && (
@@ -224,11 +402,31 @@ export const BoardViewport: React.FC<BoardViewportProps> = ({
         )}
       </div>
 
+      {/* Sticky Move or Interactive Connector Mode HUD Banner */}
+      {connectMode && !presentMode && (
+        <div className="sticky-move-hud" role="status">
+          <MoveUpRight size={14} />
+          <span>{connectSourceId ? dict.connectModePickTargetHud : dict.connectModeStartHud}</span>
+        </div>
+      )}
+      {!connectMode && isStickyMoving && !presentMode && (
+        <div className="sticky-move-hud" role="status">
+          <Move size={14} />
+          <span>{dict.stickyMoveHud}</span>
+        </div>
+      )}
+
       {/* Empty board state */}
       {boardCards.length === 0 && !presentMode && (
-        <section className="board-empty-state" aria-labelledby="empty-board-title" onPointerDown={(e) => e.stopPropagation()}>
+        <section
+          className="board-empty-state"
+          aria-labelledby="empty-board-title"
+          onPointerDown={(e) => e.stopPropagation()}
+        >
           <div className="board-empty-art" aria-hidden="true">
-            <span><ImagePlus size={28} strokeWidth={1.5} /></span>
+            <span>
+              <ImagePlus size={28} strokeWidth={1.5} />
+            </span>
           </div>
           <h1 id="empty-board-title">{dict.emptyBoardTitle}</h1>
           <p className="board-empty-text">{dict.emptyBoardGuide}</p>

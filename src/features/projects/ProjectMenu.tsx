@@ -2,7 +2,9 @@ import React, { useEffect, useRef, useState } from 'react';
 import {
   Check,
   ChevronDown,
+  Copy,
   FolderPlus,
+  LayoutGrid,
   Pencil,
   Trash2,
 } from 'lucide-react';
@@ -15,6 +17,8 @@ interface ProjectMenuProps {
   dict: I18nDict;
   onSelectProject: (id: string) => void;
   onCreateProject: (name: string) => void;
+  onDuplicateProject: (project: Project) => void;
+  onOpenProjectHub: () => void;
   onRenameProject: (id: string, name: string) => void;
   onDeleteProject: (id: string) => void;
 }
@@ -25,6 +29,8 @@ export const ProjectMenu: React.FC<ProjectMenuProps> = ({
   dict,
   onSelectProject,
   onCreateProject,
+  onDuplicateProject,
+  onOpenProjectHub,
   onRenameProject,
   onDeleteProject,
 }) => {
@@ -89,6 +95,18 @@ export const ProjectMenu: React.FC<ProjectMenuProps> = ({
 
       {open && (
         <div className="popover-panel project-popover" role="menu">
+          <button
+            type="button"
+            className="popover-action-btn"
+            onClick={() => {
+              setOpen(false);
+              onOpenProjectHub();
+            }}
+          >
+            <LayoutGrid size={15} />
+            <span>{dict.homeAllProjects}</span>
+          </button>
+          <div className="popover-divider" />
           <div className="popover-section-label">{dict.projects}</div>
           <div className="project-list">
             {projects.map((p) => {
@@ -141,6 +159,18 @@ export const ProjectMenu: React.FC<ProjectMenuProps> = ({
                         </span>
                       </button>
                       <div className="project-row-actions">
+                        <button
+                          type="button"
+                          className="icon-btn-sm"
+                          title={dict.homeDuplicateProject}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onDuplicateProject(p);
+                            setOpen(false);
+                          }}
+                        >
+                          <Copy size={13} />
+                        </button>
                         <button
                           type="button"
                           className="icon-btn-sm"

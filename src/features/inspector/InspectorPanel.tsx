@@ -1,13 +1,20 @@
 import React, { useEffect, useState } from 'react';
 import {
   Check,
+  ChevronDown,
   Copy,
+  Crop,
   ExternalLink,
+  FlipHorizontal2,
+  FolderOpen,
   Inbox,
+  Loader2,
   Lock,
-  Maximize2,
   Palette,
+  Pipette,
   RefreshCw,
+  RotateCcw,
+  Scissors,
   Trash2,
   Ungroup,
   Unlock,
@@ -20,10 +27,19 @@ import { getCategoryLabel, type I18nDict } from '../../i18n';
 interface InspectorPanelProps {
   card: Card;
   dict: I18nDict;
+  isCropping: boolean;
+  isCuttingOut: boolean;
   onClose: () => void;
   onChangeCard: (cardId: string, patch: Partial<Card>, recordUndo?: boolean) => void;
+  onToggleCrop: (cardId: string) => void;
+  onRunAiCutout: (card: Card) => void;
+  onRestoreOriginalBg: (card: Card) => void;
+  onCopyImageForApps: (card: Card) => void;
+  onPickEyedropperColor: (targetCardId?: string) => void;
   onOpenLightbox: (card: Card) => void;
+  onOpenFileCard: (card: Card) => void;
   onTriggerReplaceImage: (card: Card) => void;
+  onTriggerReplaceFile: (card: Card) => void;
   onExtractPalette: (card: Card) => void;
   onDuplicate: (cardId: string) => void;
   onMoveToInbox: (cardId: string) => void;
@@ -31,15 +47,35 @@ interface InspectorPanelProps {
   onUngroupFrame: (frameId: string) => void;
 }
 
-const NOTE_SWATCHES = ['#FAF7EE', '#F3F6EF', '#F6EFEA', '#EFF3F6', '#2B312C'];
+// Curated 10-color Studio Block Palette (harmonized from FigJam, Apple Freeform & Notion)
+const BLOCK_COLOR_PRESETS: Array<{ hex: string; name: string }> = [
+  { hex: '#FFFFFF', name: 'Trắng tinh' },
+  { hex: '#E5E7EB', name: 'Xám đá' },
+  { hex: '#FFE8A3', name: 'Vàng bơ' },
+  { hex: '#FFD6B5', name: 'Cam đào' },
+  { hex: '#FBC5C5', name: 'Hồng san hô' },
+  { hex: '#D9C8FF', name: 'Tím oải hương' },
+  { hex: '#BDE0FE', name: 'Xanh trời' },
+  { hex: '#BFEAD0', name: 'Xanh bạc hà' },
+  { hex: '#D8C3A5', name: 'Cát gỗ sồi' },
+  { hex: '#26292E', name: 'Than chì' },
+];
 
 export const InspectorPanel: React.FC<InspectorPanelProps> = ({
   card,
   dict,
+  isCropping,
+  isCuttingOut,
   onClose,
   onChangeCard,
-  onOpenLightbox,
+  onToggleCrop,
+  onRunAiCutout,
+  onRestoreOriginalBg,
+  onCopyImageForApps,
+  onPickEyedropperColor,
+  onOpenFileCard,
   onTriggerReplaceImage,
+  onTriggerReplaceFile,
   onExtractPalette,
   onDuplicate,
   onMoveToInbox,
@@ -51,13 +87,15 @@ export const InspectorPanel: React.FC<InspectorPanelProps> = ({
   const [hexInput, setHexInput] = useState(card.color ?? '#8D9A7C');
   const [hexError, setHexError] = useState('');
   const [copiedHex, setCopiedHex] = useState(false);
+  const [metaExpanded, setMetaExpanded] = useState(false);
 
   useEffect(() => {
     setPageUrlInput(card.source?.pageUrl ?? '');
     setUrlError('');
     setHexInput(card.color ?? '#8D9A7C');
     setHexError('');
-  }, [card.id, card.source?.pageUrl, card.color]);
+    setMetaExpanded(Boolean(card.spec?.code || card.spec?.price || card.source?.pageUrl));
+  }, [card.id, card.source?.pageUrl, card.color, card.spec?.code, card.spec?.price]);
 
   const commitPageUrl = () => {
     const trimmed = pageUrlInput.trim();
@@ -123,7 +161,7 @@ export const InspectorPanel: React.FC<InspectorPanelProps> = ({
       </div>
 
       <div className="panel-body">
-        {/* Common: Title */}
+        {/* Title & Category */}
         <label className="field">
           <span className="field-label">{dict.titleLabel}</span>
           <input
@@ -134,7 +172,6 @@ export const InspectorPanel: React.FC<InspectorPanelProps> = ({
           />
         </label>
 
-        {/* Common: Category (not needed on frame) */}
         {card.kind !== 'frame' && (
           <label className="field">
             <span className="field-label">{dict.categoryLabel}</span>
@@ -154,7 +191,7 @@ export const InspectorPanel: React.FC<InspectorPanelProps> = ({
           </label>
         )}
 
-        {/* Color-specific fields */}
+        {/* Color-specific HEX field */}
         {card.kind === 'color' && (
           <div className="field">
             <span className="field-label">{dict.hexLabel}</span>
@@ -173,6 +210,14 @@ export const InspectorPanel: React.FC<InspectorPanelProps> = ({
               <button
                 type="button"
                 className="icon-btn-sm"
+                title={dict.eyedropperBtn}
+                onClick={() => onPickEyedropperColor(card.id)}
+              >
+                <Pipette size={14} />
+              </button>
+              <button
+                type="button"
+                className="icon-btn-sm"
                 title={dict.copyHex}
                 onClick={handleCopyHex}
               >
@@ -183,68 +228,117 @@ export const InspectorPanel: React.FC<InspectorPanelProps> = ({
           </div>
         )}
 
-        {/* Note background */}
-        {card.kind === 'note' && (
+        {/* Block fill color control (10 fixed presets) */}
+        {card.kind !== 'image' && (
           <div className="field">
-            <span className="field-label">{dict.noteBgLabel}</span>
-            <div className="swatch-row">
-              {NOTE_SWATCHES.map((hex) => (
+            <div className="field-row-between">
+              <span className="field-label">{dict.blockColorLabel}</span>
+              {card.kind !== 'color' && card.color && (
                 <button
-                  key={hex}
                   type="button"
-                  className={`swatch-dot ${(card.color || '#FAF7EE').toUpperCase() === hex ? 'is-active' : ''}`}
-                  style={{ backgroundColor: hex }}
-                  onClick={() => onChangeCard(card.id, { color: hex }, true)}
-                />
-              ))}
+                  className="btn-link-xs"
+                  onClick={() => onChangeCard(card.id, { color: undefined, textColor: undefined }, true)}
+                >
+                  {dict.resetDefault}
+                </button>
+              )}
+            </div>
+            <div className="swatch-grid-5">
+              {BLOCK_COLOR_PRESETS.map((item, idx) => {
+                const label = dict.blockColorNames[idx] ?? item.name;
+                return (
+                  <button
+                    key={item.hex}
+                    type="button"
+                    title={`${label} (${item.hex})`}
+                    aria-label={label}
+                    className={`swatch-dot ${(card.color || '').toUpperCase() === item.hex ? 'is-active' : ''}`}
+                    style={{ backgroundColor: item.hex }}
+                    onClick={() => onChangeCard(card.id, { color: item.hex, textColor: undefined }, true)}
+                  />
+                );
+              })}
             </div>
           </div>
         )}
 
-        {/* Caption / Notes */}
-        {card.kind !== 'frame' && (
-          <label className="field">
-            <span className="field-label">{dict.captionLabel}</span>
-            <textarea
-              className="textarea-sm"
-              rows={3}
-              value={card.text}
-              onChange={(e) => onChangeCard(card.id, { text: e.target.value }, false)}
-            />
-          </label>
-        )}
+        {/* Symmetrical 2x2 Image Tools Grid (Clean, Balanced, Zero Clutter) */}
+        {card.kind === 'image' && card.assetId && (
+          <div className="inspector-tools-block">
+            <div className="inspector-grid-2x2">
+              <button
+                type="button"
+                className={`btn-xs ${isCropping ? 'btn-primary' : 'btn-subtle'}`}
+                onClick={() => onToggleCrop(card.id)}
+              >
+                <Crop size={13} />
+                <span className="truncate">{isCropping ? dict.cropDone : dict.cropImage}</span>
+              </button>
 
-        {/* Image quick actions */}
-        {card.kind === 'image' && (
-          <div className="inspector-action-stack">
-            <div className="inspector-btn-row">
+              {card.cutout && card.originalAssetId ? (
+                <button
+                  type="button"
+                  className="btn-xs btn-subtle"
+                  onClick={() => onRestoreOriginalBg(card)}
+                >
+                  <RotateCcw size={13} />
+                  <span className="truncate">{dict.aiCutoutRestore}</span>
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  className="btn-xs btn-subtle"
+                  disabled={isCuttingOut}
+                  onClick={() => onRunAiCutout(card)}
+                >
+                  {isCuttingOut ? <Loader2 size={13} className="spin" /> : <Scissors size={13} />}
+                  <span className="truncate">
+                    {isCuttingOut ? dict.aiCutoutRunning : dict.aiCutoutBtn}
+                  </span>
+                </button>
+              )}
+
               <button
                 type="button"
-                className="btn-xs btn-subtle flex-1"
-                onClick={() => onOpenLightbox(card)}
-                disabled={!card.assetId}
-              >
-                <Maximize2 size={13} />
-                <span>{dict.viewLarge}</span>
-              </button>
-              <button
-                type="button"
-                className="btn-xs btn-subtle flex-1"
-                onClick={() => onTriggerReplaceImage(card)}
-              >
-                <RefreshCw size={13} />
-                <span>{dict.replaceImage}</span>
-              </button>
-            </div>
-            {card.assetId && (
-              <button
-                type="button"
-                className="btn-xs btn-subtle full-width"
+                className="btn-xs btn-subtle"
                 onClick={() => onExtractPalette(card)}
               >
                 <Palette size={13} />
-                <span>{dict.extractPalette}</span>
+                <span className="truncate">{dict.extractPaletteShort}</span>
               </button>
+
+              <button
+                type="button"
+                className="btn-xs btn-subtle"
+                onClick={() => onTriggerReplaceImage(card)}
+              >
+                <RefreshCw size={13} />
+                <span className="truncate">{dict.replaceImage}</span>
+              </button>
+            </div>
+
+            {/* Contextual sub-bar shown only when cropping or transformed */}
+            {(isCropping || card.crop || card.flipH) && (
+              <div className="inspector-sub-bar">
+                <button
+                  type="button"
+                  className={`btn-xs ${card.flipH ? 'btn-primary' : 'btn-subtle'} flex-1`}
+                  onClick={() => onChangeCard(card.id, { flipH: !card.flipH }, true)}
+                >
+                  <FlipHorizontal2 size={12} />
+                  <span>{dict.flipHorizontal}</span>
+                </button>
+                {card.crop && (
+                  <button
+                    type="button"
+                    className="btn-xs btn-subtle flex-1"
+                    onClick={() => onChangeCard(card.id, { crop: undefined }, true)}
+                  >
+                    <RotateCcw size={12} />
+                    <span>{dict.cropReset}</span>
+                  </button>
+                )}
+              </div>
             )}
           </div>
         )}
@@ -262,8 +356,38 @@ export const InspectorPanel: React.FC<InspectorPanelProps> = ({
                 <strong>{(card.designFile.size / (1024 * 1024)).toFixed(2)} MB</strong>
               </div>
             ) : null}
-            <p className="field-hint">{dict.desktopHintFile}</p>
+            <div className="inspector-btn-row" style={{ marginTop: 4 }}>
+              <button
+                type="button"
+                className="btn-xs btn-primary flex-1"
+                onClick={() => onOpenFileCard(card)}
+              >
+                <FolderOpen size={13} />
+                <span>{dict.openFile}</span>
+              </button>
+              <button
+                type="button"
+                className="btn-xs btn-subtle flex-1"
+                onClick={() => onTriggerReplaceFile(card)}
+              >
+                <RefreshCw size={13} />
+                <span>{dict.relinkFile}</span>
+              </button>
+            </div>
           </div>
+        )}
+
+        {/* Caption / Notes (compact 2 rows) */}
+        {card.kind !== 'frame' && (
+          <label className="field">
+            <span className="field-label">{dict.captionLabel}</span>
+            <textarea
+              className="textarea-sm"
+              rows={2}
+              value={card.text}
+              onChange={(e) => onChangeCard(card.id, { text: e.target.value }, false)}
+            />
+          </label>
         )}
 
         {/* Frame ungroup */}
@@ -278,80 +402,156 @@ export const InspectorPanel: React.FC<InspectorPanelProps> = ({
           </button>
         )}
 
-        {/* Source panel (Section 5: separate pageUrl & imageUrl!) */}
-        {card.kind !== 'frame' && card.kind !== 'color' && (
-          <div className="inspector-section">
-            <div className="inspector-section-head">
-              <span>{dict.sourceSection}</span>
-              {!hasWebSource && hasDirectImageUrl && (
-                <span className="warn-badge">{dict.noWebSource}</span>
-              )}
-            </div>
-
-            {card.source?.fileName && (
-              <div className="source-meta-line">
-                <span className="field-label">{dict.fileNameLabel}:</span>
-                <span className="truncate mono">{card.source.fileName}</span>
-              </div>
-            )}
-
-            <label className="field">
-              <span className="field-label">{dict.pageUrlLabel}</span>
-              <input
-                className="input-sm"
-                type="url"
-                placeholder={dict.pageUrlPlaceholder}
-                value={pageUrlInput}
-                onChange={(e) => {
-                  setPageUrlInput(e.target.value);
-                  if (urlError) setUrlError('');
-                }}
-                onBlur={commitPageUrl}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') {
-                    e.preventDefault();
-                    commitPageUrl();
-                  }
-                }}
+        {/* Collapsible Secondary Drawer: FF&E Spec & Reference Source */}
+        {card.kind !== 'frame' && (
+          <div className="inspector-disclosure">
+            <button
+              type="button"
+              className="inspector-disclosure-btn"
+              aria-expanded={metaExpanded}
+              onClick={() => setMetaExpanded((v) => !v)}
+            >
+              <span>{dict.metaDisclosure}</span>
+              <ChevronDown
+                size={14}
+                className={`disclosure-chevron ${metaExpanded ? 'is-open' : ''}`}
               />
-              {urlError && <span className="field-error">{urlError}</span>}
-            </label>
+            </button>
 
-            {hasDirectImageUrl && (
-              <div className="source-meta-line">
-                <span className="field-label">{dict.imageUrlLabel}:</span>
-                <span className="truncate mono" title={card.source?.imageUrl}>
-                  {card.source?.imageUrl}
-                </span>
+            {metaExpanded && (
+              <div className="inspector-disclosure-body">
+                {(card.kind === 'image' || card.kind === 'color' || card.kind === 'file') && (
+                  <>
+                    <label className="field">
+                      <span className="field-label">{dict.ffeCodeLabel}</span>
+                      <input
+                        className="input-sm"
+                        placeholder={dict.ffeCodePlaceholder}
+                        value={card.spec?.code ?? ''}
+                        onChange={(e) =>
+                          onChangeCard(
+                            card.id,
+                            { spec: { ...card.spec, code: e.target.value } },
+                            false
+                          )
+                        }
+                        onBlur={() =>
+                          onChangeCard(
+                            card.id,
+                            { spec: { ...card.spec, code: card.spec?.code } },
+                            true
+                          )
+                        }
+                      />
+                    </label>
+                    <div className="ffe-price-qty-row">
+                      <label className="field flex-1">
+                        <span className="field-label">{dict.ffePriceLabel}</span>
+                        <input
+                          className="input-sm"
+                          placeholder={dict.ffePricePlaceholder}
+                          value={card.spec?.price ?? ''}
+                          onChange={(e) =>
+                            onChangeCard(
+                              card.id,
+                              { spec: { ...card.spec, price: e.target.value } },
+                              false
+                            )
+                          }
+                          onBlur={() =>
+                            onChangeCard(
+                              card.id,
+                              { spec: { ...card.spec, price: card.spec?.price } },
+                              true
+                            )
+                          }
+                        />
+                      </label>
+                      <label className="field" style={{ width: 60, flexShrink: 0 }}>
+                        <span className="field-label">{dict.ffeQtyLabel}</span>
+                        <input
+                          type="number"
+                          min={1}
+                          max={9999}
+                          className="input-sm mono"
+                          value={card.spec?.qty ?? 1}
+                          onChange={(e) => {
+                            const val = Math.max(1, Math.min(9999, parseInt(e.target.value, 10) || 1));
+                            onChangeCard(
+                              card.id,
+                              { spec: { ...card.spec, qty: val } },
+                              true
+                            );
+                          }}
+                        />
+                      </label>
+                    </div>
+                  </>
+                )}
+
+                {card.kind !== 'color' && (
+                  <>
+                    {card.source?.fileName && (
+                      <div className="source-meta-line">
+                        <span className="field-label">{dict.fileNameLabel}:</span>
+                        <span className="truncate mono">{card.source.fileName}</span>
+                      </div>
+                    )}
+
+                    <label className="field">
+                      <span className="field-label">{dict.pageUrlLabel}</span>
+                      <input
+                        className="input-sm"
+                        type="url"
+                        placeholder={dict.pageUrlPlaceholder}
+                        value={pageUrlInput}
+                        onChange={(e) => {
+                          setPageUrlInput(e.target.value);
+                          if (urlError) setUrlError('');
+                        }}
+                        onBlur={commitPageUrl}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') {
+                            e.preventDefault();
+                            commitPageUrl();
+                          }
+                        }}
+                      />
+                      {urlError && <span className="field-error">{urlError}</span>}
+                    </label>
+
+                    {(hasWebSource || hasDirectImageUrl) && (
+                      <div className="inspector-btn-row">
+                        {hasWebSource && (
+                          <button
+                            type="button"
+                            className="btn-xs btn-primary flex-1"
+                            onClick={() =>
+                              window.open(card.source!.pageUrl!, '_blank', 'noopener,noreferrer')
+                            }
+                          >
+                            <ExternalLink size={12} />
+                            <span>{dict.openSource}</span>
+                          </button>
+                        )}
+                        {hasDirectImageUrl && (
+                          <button
+                            type="button"
+                            className="btn-xs btn-subtle flex-1"
+                            onClick={() =>
+                              window.open(card.source!.imageUrl!, '_blank', 'noopener,noreferrer')
+                            }
+                          >
+                            <ExternalLink size={12} />
+                            <span>{dict.openImageUrl}</span>
+                          </button>
+                        )}
+                      </div>
+                    )}
+                  </>
+                )}
               </div>
             )}
-
-            <div className="inspector-btn-row">
-              {hasWebSource && (
-                <button
-                  type="button"
-                  className="btn-xs btn-primary flex-1"
-                  onClick={() =>
-                    window.open(card.source!.pageUrl!, '_blank', 'noopener,noreferrer')
-                  }
-                >
-                  <ExternalLink size={12} />
-                  <span>{dict.openSource}</span>
-                </button>
-              )}
-              {hasDirectImageUrl && (
-                <button
-                  type="button"
-                  className="btn-xs btn-subtle flex-1"
-                  onClick={() =>
-                    window.open(card.source!.imageUrl!, '_blank', 'noopener,noreferrer')
-                  }
-                >
-                  <ExternalLink size={12} />
-                  <span>{dict.openImageUrl}</span>
-                </button>
-              )}
-            </div>
           </div>
         )}
 
@@ -360,16 +560,21 @@ export const InspectorPanel: React.FC<InspectorPanelProps> = ({
           <button
             type="button"
             className="btn-xs btn-subtle flex-1"
+            style={{ minWidth: 0 }}
             onClick={() => onChangeCard(card.id, { locked: !card.locked }, true)}
           >
             {card.locked ? <Unlock size={13} /> : <Lock size={13} />}
-            <span>{card.locked ? dict.unlockCard : dict.lockCard}</span>
+            <span className="truncate">{card.locked ? dict.unlockCard : dict.lockCard}</span>
           </button>
           <button
             type="button"
             className="btn-xs btn-subtle"
-            title={dict.duplicate}
-            onClick={() => onDuplicate(card.id)}
+            title={card.kind === 'image' && card.assetId ? dict.copyForDesignApps : dict.duplicate}
+            onClick={() =>
+              card.kind === 'image' && card.assetId
+                ? onCopyImageForApps(card)
+                : onDuplicate(card.id)
+            }
           >
             <Copy size={13} />
           </button>
@@ -386,7 +591,7 @@ export const InspectorPanel: React.FC<InspectorPanelProps> = ({
           <button
             type="button"
             className="btn-xs btn-danger-subtle"
-            title={dict.deleteToTrash}
+            title={`${dict.deleteToTrash} (Del)`}
             onClick={() => onDelete(card.id)}
           >
             <Trash2 size={13} />

@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import React, { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Check,
   CircleAlert,
@@ -13,6 +13,7 @@ import {
   Maximize,
   Minus,
   MoreHorizontal,
+  MoveUpRight,
   Palette,
   Plus,
   Presentation,
@@ -31,9 +32,14 @@ import type {
   ProjectAppearance,
   ProjectView,
   SaveStatus,
+  StudioProfile,
   WorkspaceMeta,
 } from './domain/types';
 import { createEmptyProject, getNextZ } from './domain/project';
+import {
+  createProjectFromTemplate,
+  type ProjectTemplateId,
+} from './domain/templates';
 import {
   alignSelectedCards,
   clampZoom,
@@ -43,6 +49,7 @@ import {
   recomputeFrameBoundsForAll,
   screenToWorld,
   zoomAtScreenPoint,
+  type AlignMode,
   type Point,
 } from './domain/geometry';
 import {
@@ -53,51 +60,105 @@ import {
   type ProjectHistoryStack,
 } from './domain/history';
 import { computeArrangedCards } from './domain/arrange';
-import { createId, isDarkColor, isValidHttpUrl } from './domain/validate';
-import { extractPaletteFromBlob } from './domain/paletteExtract';
+import {
+  createId,
+  extractInlineSvg,
+  isDarkColor,
+  isValidHttpUrl,
+  normalizeHex,
+  parseDroppedHtml,
+} from './domain/validate';
+import {
+  extractBoard60_30_10Palette,
+  extractPaletteFromBlob,
+  hexColorDistance,
+} from './domain/paletteExtract';
 import { getDict, type Language } from './i18n';
 import {
   deleteProjectById,
+  duplicateProject,
   getAssetBlob,
   initWorkspace,
+  putImageAsset,
   revokeAllCachedAssetUrls,
   saveProject,
   saveWorkspaceMeta,
 } from './storage/workspaceRepository';
+import {
+  checkDirectoryPermission,
+  getSavedSyncDirectory,
+  isFolderSyncSupported,
+  openMosaFilePickerNative,
+  saveProjectAsMosaFile,
+  syncProjectToDirectory,
+  type FsDirectoryHandle,
+} from './storage/localFolderSync';
+import { commitImportedBackup, parseAndValidateBackupFile } from './storage/backup';
+import { decodeImageElement } from './storage/assets';
 import { resetDbConnection } from './storage/indexedDb';
 import { BoardViewport } from './board/BoardViewport';
+import { CanvasContextMenu, type ContextMenuState } from './board/CanvasContextMenu';
 import { SelectionOverlay } from './board/SelectionOverlay';
 import { useBoardInteractions } from './board/useBoardInteractions';
 import { ProjectMenu } from './features/projects/ProjectMenu';
 import { InspectorPanel } from './features/inspector/InspectorPanel';
 import { InboxPanel } from './features/inbox/InboxPanel';
 import { SettingsPopover } from './features/appearance/SettingsPopover';
-import { SearchBar } from './features/export/SearchBar';
-import { ArrangeModal } from './features/export/ArrangeModal';
-import { ClassifyModal } from './features/classification/ClassifyModal';
-import { ExportModal } from './features/export/ExportModal';
-import { BackupModal } from './features/export/BackupModal';
+import { SearchBar, type BoardFilterState } from './features/export/SearchBar';
+import { renderMoodboardPng, renderProjectCoverDataUrl } from './features/export/exportPng';
+import { useClipperBridge } from './features/clipper/useClipperBridge';
+
+const ProjectHubOverlay = lazy(() =>
+  import('./features/projects/ProjectHubOverlay').then((m) => ({ default: m.ProjectHubOverlay }))
+);
+const ArrangeModal = lazy(() =>
+  import('./features/export/ArrangeModal').then((m) => ({ default: m.ArrangeModal }))
+);
+const ExportModal = lazy(() =>
+  import('./features/export/ExportModal').then((m) => ({ default: m.ExportModal }))
+);
+const BackupModal = lazy(() =>
+  import('./features/export/BackupModal').then((m) => ({ default: m.BackupModal }))
+);
 import { ShortcutsModal } from './features/export/ShortcutsModal';
 import { AddLinkModal } from './features/capture/AddLinkModal';
 import { LightboxModal } from './features/capture/LightboxModal';
 import { TrashModal } from './features/capture/TrashModal';
 import {
+  importDataUrlAsCard,
   importFilesAsCards,
+  importInlineSvgAsCard,
   importUrlAsCard,
   importWebDropData,
   replaceCardImageFile,
+  replaceCardRawFile,
 } from './features/capture/captureService';
+import type { CutoutOutboundMessage } from './workers/cutout.worker';
+import { openFileCard } from './desktop/tauriBridge';
 
 const CLIPBOARD_MARKER = '__0Y03_CARDS_V1__';
 
-function fitWorkspaceView(cards: Card[], width: number, height: number, presenting = false) {
+function fitWorkspaceView(
+  cards: Card[],
+  width: number,
+  height: number,
+  presenting = false,
+  dockedRightWidth = 0
+) {
   if (presenting) {
     return computeFitView(cards, width, height, { side: 20, top: 20, bottom: 76 });
   }
 
   const tokens = getComputedStyle(document.documentElement);
+  const baseSide = Math.min(48, Math.round(width * 0.05));
+  const rightInset =
+    dockedRightWidth > 0 && width > dockedRightWidth + 320
+      ? dockedRightWidth + 32
+      : baseSide;
   return computeFitView(cards, width, height, {
-    side: Math.min(48, Math.round(width * 0.05)),
+    side: baseSide,
+    left: baseSide,
+    right: rightInset,
     top: parseFloat(tokens.getPropertyValue('--workspace-header-height')) + 16,
     bottom: parseFloat(tokens.getPropertyValue('--workspace-footer-clearance')) + 16,
   });
@@ -114,18 +175,44 @@ export const App: React.FC = () => {
   // Selection, editing & UI modes
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [editingCardId, setEditingCardId] = useState<string | null>(null);
+  const [croppingCardId, setCroppingCardId] = useState<string | null>(null);
+  const [cuttingOutCardId, setCuttingOutCardId] = useState<string | null>(null);
+  const [connectMode, setConnectMode] = useState(false);
+  const [connectSourceId, setConnectSourceId] = useState<string | null>(null);
+  const [connectCursorWorld, setConnectCursorWorld] = useState<Point | null>(null);
+  const [boardFilter, setBoardFilter] = useState<BoardFilterState>({
+    category: null,
+    colorHex: null,
+    duplicatesOnly: false,
+  });
   const [highlightedCardId, setHighlightedCardId] = useState<string | null>(null);
   const [inboxOpen, setInboxOpen] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
   const [moreMenuOpen, setMoreMenuOpen] = useState(false);
+  const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null);
   const [presentMode, setPresentMode] = useState(false);
   const prePresentViewRef = useRef<ProjectView | null>(null);
 
   // Modals
   const [arrangeOpen, setArrangeOpen] = useState(false);
   const [arrangePreviewCards, setArrangePreviewCards] = useState<Card[] | null>(null);
-  const [classifyOpen, setClassifyOpen] = useState(false);
+  const [arrangeAnimating, setArrangeAnimating] = useState(false);
+  const arrangeAnimTimerRef = useRef<number | null>(null);
+  const lastPreviewFitKeyRef = useRef<string | null>(null);
+  const internalClipboardRef = useRef<{
+    cards: Card[];
+    pngSize: number;
+    copiedAt: number;
+  } | null>(null);
   const [exportOpen, setExportOpen] = useState(false);
   const [backupOpen, setBackupOpen] = useState(false);
+  const [projectHubOpen, setProjectHubOpen] = useState(false);
+  const [syncFolderHandle, setSyncFolderHandle] = useState<FsDirectoryHandle | null>(null);
+  const syncFolderRef = useRef<FsDirectoryHandle | null>(null);
+  syncFolderRef.current = syncFolderHandle;
+  const folderSyncTimersRef = useRef<Map<string, number>>(new Map());
+  const metaRef = useRef<WorkspaceMeta | null>(meta);
+  metaRef.current = meta;
   const [addLinkOpen, setAddLinkOpen] = useState(false);
   const [trashOpen, setTrashOpen] = useState(false);
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
@@ -140,6 +227,8 @@ export const App: React.FC = () => {
   const filePickerRef = useRef<HTMLInputElement | null>(null);
   const replacePickerRef = useRef<HTMLInputElement | null>(null);
   const replaceTargetCardRef = useRef<Card | null>(null);
+  const replaceFilePickerRef = useRef<HTMLInputElement | null>(null);
+  const replaceTargetFileCardRef = useRef<Card | null>(null);
   const moreMenuRef = useRef<HTMLDivElement | null>(null);
   const historyMapRef = useRef<Map<string, ProjectHistoryStack>>(new Map());
   const [, bumpHistoryVersion] = useState(0);
@@ -170,6 +259,11 @@ export const App: React.FC = () => {
       setMeta(init.meta);
       setProjects(init.projects);
       setActiveProjectId(init.activeProject.id);
+      if (isFolderSyncSupported()) {
+        getSavedSyncDirectory()
+          .then((h) => setSyncFolderHandle(h))
+          .catch(() => undefined);
+      }
 
       // Fit board nicely on first visit to sample board
       if (
@@ -238,7 +332,24 @@ export const App: React.FC = () => {
   const darkTheme = activeProject ? isDarkColor(activeProject.appearance.background) : false;
 
   useEffect(() => {
+    document.documentElement.lang = language;
+    document.title = dict.pageTitle;
+  }, [language, dict.pageTitle]);
+
+  useEffect(() => {
     document.documentElement.classList.toggle('theme-dark', darkTheme);
+    document.documentElement.style.colorScheme = darkTheme ? 'dark' : 'light';
+
+    // Sync OS / Edge --app / PWA Window Title Bar color dynamically with Light/Dark mode
+    const titleBarColor = darkTheme ? '#1c1c1e' : '#f2f2f7';
+    let metaTheme = document.querySelector<HTMLMetaElement>('meta[name="theme-color"]');
+    if (!metaTheme) {
+      metaTheme = document.createElement('meta');
+      metaTheme.name = 'theme-color';
+      document.head.appendChild(metaTheme);
+    }
+    metaTheme.content = titleBarColor;
+
     return () => {
       document.documentElement.classList.remove('theme-dark');
     };
@@ -269,15 +380,15 @@ export const App: React.FC = () => {
     [activeProject?.cards, lightboxCardId]
   );
 
-  const anyModalOpen =
-    arrangeOpen ||
-    classifyOpen ||
+  const blockingModalOpen =
+    projectHubOpen ||
     exportOpen ||
     backupOpen ||
     addLinkOpen ||
     trashOpen ||
-    shortcutsOpen ||
     Boolean(lightboxCardId);
+
+  const anyModalOpen = arrangeOpen || blockingModalOpen;
 
   // Persistence helper: immediate or debounced per project
   const persistProject = useCallback(
@@ -291,10 +402,29 @@ export const App: React.FC = () => {
         try {
           await saveProject(project);
           setSaveStatus('saved');
+
+          // Debounced background .mosa folder mirror if user linked a local directory
+          const handle = syncFolderRef.current;
+          if (handle && metaRef.current?.autoFolderSync) {
+            const prevSyncTimer = folderSyncTimersRef.current.get(project.id);
+            if (prevSyncTimer) window.clearTimeout(prevSyncTimer);
+            const syncTimer = window.setTimeout(async () => {
+              folderSyncTimersRef.current.delete(project.id);
+              try {
+                const granted = await checkDirectoryPermission(handle, false);
+                if (granted) {
+                  await syncProjectToDirectory(handle, project);
+                }
+              } catch {
+                // Silent background retry next edit
+              }
+            }, 2400);
+            folderSyncTimersRef.current.set(project.id, syncTimer);
+          }
         } catch (err) {
           setSaveStatus('error');
           showToast(
-            err instanceof Error ? err.message : 'Chưa lưu được vào bộ nhớ máy.',
+            err instanceof Error ? err.message : dict.saveLocalError,
             true
           );
         }
@@ -321,7 +451,7 @@ export const App: React.FC = () => {
   }, []);
 
   /**
-   * Central project mutation entry point — supports targeted projectId (W10, W17!)
+   * Central project mutation entry point - supports targeted projectId (W10, W17!)
    * and optional single-step Undo recording.
    */
   const mutateProject = useCallback(
@@ -344,7 +474,9 @@ export const App: React.FC = () => {
         updatedAt: new Date().toISOString(),
       };
 
-      setProjects((list) => list.map((p) => (p.id === targetProjectId ? nextProject : p)));
+      const nextList = projectsRef.current.map((p) => (p.id === targetProjectId ? nextProject : p));
+      projectsRef.current = nextList;
+      setProjects(nextList);
       persistProject(nextProject, opts?.debounceMs ?? 0);
     },
     [getHistoryStack, persistProject]
@@ -403,10 +535,17 @@ export const App: React.FC = () => {
 
   const handleFitBoard = useCallback(() => {
     if (!activeProject) return;
-    const boardCards = activeProject.cards.filter((c) => !c.inbox);
-    const nextView = fitWorkspaceView(boardCards, viewportSize.width, viewportSize.height);
+    const sourceCards = arrangePreviewCards ?? activeProject.cards;
+    const boardCards = sourceCards.filter((c) => !c.inbox);
+    const nextView = fitWorkspaceView(
+      boardCards,
+      viewportSize.width,
+      viewportSize.height,
+      false,
+      arrangeOpen ? 360 : 0
+    );
     handleViewChange(nextView, true);
-  }, [activeProject, handleViewChange, viewportSize.height, viewportSize.width]);
+  }, [activeProject, arrangeOpen, arrangePreviewCards, handleViewChange, viewportSize.height, viewportSize.width]);
 
   const handleZoomStep = useCallback(
     (factor: number) => {
@@ -491,6 +630,146 @@ export const App: React.FC = () => {
     [meta]
   );
 
+  const handleChangeStudioProfile = useCallback(
+    (studioProfile: StudioProfile) => {
+      if (!meta) return;
+      const nextMeta: WorkspaceMeta = { ...meta, studioProfile };
+      setMeta(nextMeta);
+      void saveWorkspaceMeta(nextMeta);
+    },
+    [meta]
+  );
+
+  const handleChangeAutoFolderSync = useCallback(
+    (autoFolderSync: boolean) => {
+      if (!meta) return;
+      const nextMeta: WorkspaceMeta = { ...meta, autoFolderSync };
+      setMeta(nextMeta);
+      void saveWorkspaceMeta(nextMeta);
+    },
+    [meta]
+  );
+
+  const handleOpenProjectHub = useCallback(() => {
+    setArrangeOpen(false);
+    setArrangePreviewCards(null);
+    setSettingsOpen(false);
+    setMoreMenuOpen(false);
+    setInboxOpen(false);
+    setContextMenu(null);
+    setProjectHubOpen(true);
+
+    // Lazily refresh cover thumbnail of active project so Home Hub shows fresh board artwork
+    const cur = projectsRef.current.find((p) => p.id === activeProjectIdRef.current);
+    if (cur && cur.cards.some((c) => !c.inbox && c.kind !== 'frame')) {
+      void renderProjectCoverDataUrl(cur).then((coverDataUrl) => {
+        if (!coverDataUrl) return;
+        const target = projectsRef.current.find((p) => p.id === cur.id);
+        if (!target) return;
+        const updated = { ...target, coverDataUrl };
+        setProjects((list) => list.map((p) => (p.id === cur.id ? updated : p)));
+        void saveProject(updated);
+      });
+    }
+  }, []);
+
+  const handleCreateFromTemplate = useCallback(
+    (templateId: ProjectTemplateId, customName?: string) => {
+      const created = createProjectFromTemplate(templateId, customName, dict);
+      const nextList = [created, ...projectsRef.current];
+      projectsRef.current = nextList;
+      setProjects(nextList);
+      setActiveProjectId(created.id);
+      setSelectedIds([]);
+      setEditingCardId(null);
+      persistProject(created, 0);
+      if (meta) {
+        const nextMeta: WorkspaceMeta = { ...meta, activeProjectId: created.id };
+        setMeta(nextMeta);
+        void saveWorkspaceMeta(nextMeta);
+      }
+    },
+    [dict, meta, persistProject]
+  );
+
+  const handleDuplicateProject = useCallback(
+    async (source: Project) => {
+      const cloned = await duplicateProject(source, dict.homeCopySuffix);
+      const nextList = [cloned, ...projectsRef.current];
+      projectsRef.current = nextList;
+      setProjects(nextList);
+      showToast(dict.homeDuplicatedToast);
+    },
+    [dict.homeCopySuffix, dict.homeDuplicatedToast, showToast]
+  );
+
+  const handleUpdateProjectMeta = useCallback(
+    (
+      id: string,
+      patch: Partial<Pick<Project, 'name' | 'status' | 'clientName' | 'projectCode' | 'pinned'>>
+    ) => {
+      mutateProject(id, (p) => ({ ...p, ...patch }), { recordUndo: false });
+    },
+    [mutateProject]
+  );
+
+  const handleExportMosaFileQuick = useCallback(
+    async (proj: Project) => {
+      try {
+        const ok = await saveProjectAsMosaFile(proj);
+        if (ok) showToast(dict.backupExportSuccess);
+      } catch (err) {
+        showToast(err instanceof Error ? err.message : dict.backupExportError, true);
+      }
+    },
+    [dict.backupExportError, dict.backupExportSuccess, showToast]
+  );
+
+  const handleOpenMosaFileQuick = useCallback(async () => {
+    const file = await openMosaFilePickerNative();
+    if (!file) return;
+    const res = await parseAndValidateBackupFile(file);
+    if (!res.ok) {
+      showToast(res.reason, true);
+      return;
+    }
+    try {
+      const imported = await commitImportedBackup(res.data);
+      const nextList = [imported, ...projectsRef.current];
+      projectsRef.current = nextList;
+      setProjects(nextList);
+      handleSelectProject(imported.id);
+      setProjectHubOpen(false);
+      showToast(dict.projectImportedToast(imported.name));
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : dict.backupImportError, true);
+    }
+  }, [dict, handleSelectProject, showToast]);
+
+  // Listen to Chrome / Edge Mosa Web Clipper extension bridge (localhost only)
+  const handleWebClipReceived = useCallback(
+    (clipCard: Card) => {
+      const targetId = activeProjectIdRef.current;
+      if (!targetId) return;
+      mutateProject(
+        targetId,
+        (p) => ({
+          ...p,
+          cards: [...p.cards, { ...clipCard, z: getNextZ(p.cards) }],
+        }),
+        { recordUndo: true }
+      );
+      showToast(dict.clipperReceivedToast(clipCard.title || 'Web Clip'));
+    },
+    [dict, mutateProject, showToast]
+  );
+
+  const { bridgeAvailable: clipperBridgeReady } = useClipperBridge(
+    !loading && Boolean(activeProjectId),
+    language,
+    handleWebClipReceived
+  );
+
   const handleChangeAppearance = useCallback(
     (appearance: ProjectAppearance) => {
       if (!activeProject) return;
@@ -507,7 +786,7 @@ export const App: React.FC = () => {
       const card: Card = {
         id: createId('crd'),
         kind: 'note',
-        title: 'Ghi chú concept',
+        title: dict.defaultNoteTitle,
         text: '',
         color: '#FAF7EE',
         category: 'other',
@@ -530,32 +809,35 @@ export const App: React.FC = () => {
     [activeProject, mutateProject]
   );
 
-  const createColorCard = useCallback(() => {
-    if (!activeProject) return;
-    const pt = getViewportCenterWorld();
-    const now = new Date().toISOString();
-    const card: Card = {
-      id: createId('crd'),
-      kind: 'color',
-      title: 'Sage',
-      text: '',
-      color: '#8D9A7C',
-      category: 'palette',
-      x: Math.round(pt.x - 86),
-      y: Math.round(pt.y - 52),
-      w: 174,
-      h: 104,
-      z: getNextZ(activeProject.cards),
-      inbox: false,
-      locked: false,
-      createdAt: now,
-      updatedAt: now,
-    };
-    mutateProject(activeProject.id, (p) => ({ ...p, cards: [...p.cards, card] }), {
-      recordUndo: true,
-    });
-    setSelectedIds([card.id]);
-  }, [activeProject, getViewportCenterWorld, mutateProject]);
+  const createColorCard = useCallback(
+    (worldPt?: Point) => {
+      if (!activeProject) return;
+      const pt = worldPt ?? getViewportCenterWorld();
+      const now = new Date().toISOString();
+      const card: Card = {
+        id: createId('crd'),
+        kind: 'color',
+        title: 'Sage',
+        text: '',
+        color: '#8D9A7C',
+        category: 'palette',
+        x: Math.round(pt.x - 86),
+        y: Math.round(pt.y - 52),
+        w: 174,
+        h: 104,
+        z: getNextZ(activeProject.cards),
+        inbox: false,
+        locked: false,
+        createdAt: now,
+        updatedAt: now,
+      };
+      mutateProject(activeProject.id, (p) => ({ ...p, cards: [...p.cards, card] }), {
+        recordUndo: true,
+      });
+      setSelectedIds([card.id]);
+    },
+    [activeProject, getViewportCenterWorld, mutateProject]
+  );
 
   // Group / Ungroup
   const handleGroupSelected = useCallback(() => {
@@ -574,7 +856,7 @@ export const App: React.FC = () => {
     const frame: Card = {
       id: frameId,
       kind: 'frame',
-      title: 'Nhóm concept',
+      title: dict.defaultGroupTitle,
       text: '',
       category: 'other',
       x: Math.round(bounds.x - 24),
@@ -906,9 +1188,66 @@ export const App: React.FC = () => {
           { recordUndo: true }
         );
       } catch (err) {
-        showToast(err instanceof Error ? err.message : 'Không thể thay ảnh.', true);
+        showToast(err instanceof Error ? err.message : dict.replaceImageError, true);
       } finally {
         replaceTargetCardRef.current = null;
+      }
+    },
+    [mutateProject, showToast]
+  );
+
+  const handleOpenFileCard = useCallback(
+    async (card: Card) => {
+      const res = await openFileCard(card);
+      showToast(res.message, !res.ok);
+      if (res.needsRelink) {
+        replaceTargetFileCardRef.current = card;
+        replaceFilePickerRef.current?.click();
+      }
+    },
+    [showToast]
+  );
+
+  const handleReplaceFilePicked = useCallback(
+    async (files: FileList | null) => {
+      const file = files?.[0];
+      const target = replaceTargetFileCardRef.current;
+      const pid = activeProjectIdRef.current;
+      if (!file || !target || !pid) return;
+      try {
+        const metaRes = await replaceCardRawFile(file);
+        const now = new Date().toISOString();
+        const updatedCard: Card = {
+          ...target,
+          title: metaRes.fileName,
+          assetId: metaRes.assetId,
+          designFile: {
+            extension: metaRes.extension,
+            size: metaRes.size,
+            mime: metaRes.mime,
+            localPath: metaRes.localPath,
+          },
+          source: {
+            ...(target.source ?? { method: 'picker', capturedAt: now }),
+            fileName: metaRes.fileName,
+            localPath: metaRes.localPath,
+          },
+          updatedAt: now,
+        };
+        mutateProject(
+          pid,
+          (p) => ({
+            ...p,
+            cards: p.cards.map((c) => (c.id === target.id ? updatedCard : c)),
+          }),
+          { recordUndo: true }
+        );
+        const openRes = await openFileCard(updatedCard);
+        showToast(openRes.message, !openRes.ok);
+      } catch (err) {
+        showToast(err instanceof Error ? err.message : dict.relinkFileError, true);
+      } finally {
+        replaceTargetFileCardRef.current = null;
       }
     },
     [mutateProject, showToast]
@@ -952,6 +1291,414 @@ export const App: React.FC = () => {
     [activeProject, mutateProject]
   );
 
+  // Phase 2.3: Board-wide 60-30-10 Interior Color Rule Palette Generator
+  const handleGenerateBoardPalette = useCallback(async () => {
+    const proj = projectsRef.current.find((p) => p.id === activeProjectIdRef.current);
+    if (!proj) return;
+    const imgCards = proj.cards.filter((c) => !c.inbox && c.kind === 'image' && c.assetId);
+    if (imgCards.length === 0) return;
+
+    const blobs: Blob[] = [];
+    for (const c of imgCards) {
+      const b = await getAssetBlob(c.assetId!, true);
+      if (b) blobs.push(b);
+    }
+    if (blobs.length === 0) return;
+
+    const swatches = await extractBoard60_30_10Palette(blobs, {
+      role60: dict.role60,
+      role30: dict.role30,
+      role10: dict.role10,
+    });
+    if (swatches.length === 0) return;
+
+    const bounds = computeCardsBounds(proj.cards.filter((c) => !c.inbox));
+    const startX = bounds ? Math.round(bounds.x) : 120;
+    const startY = bounds ? Math.round(bounds.y + bounds.h + 32) : 420;
+    const now = new Date().toISOString();
+    let z = getNextZ(proj.cards);
+
+    const newCards: Card[] = swatches.map((sw, idx) => ({
+      id: createId('crd'),
+      kind: 'color',
+      title: sw.name,
+      text: '',
+      color: sw.hex,
+      category: 'palette',
+      x: startX + idx * 176,
+      y: startY,
+      w: 162,
+      h: 96,
+      z: ++z,
+      inbox: false,
+      locked: false,
+      createdAt: now,
+      updatedAt: now,
+    }));
+
+    mutateProject(
+      proj.id,
+      (p) => ({ ...p, cards: [...p.cards, ...newCards] }),
+      { recordUndo: true }
+    );
+    setSelectedIds(newCards.map((c) => c.id));
+    showToast(dict.boardPaletteCreatedToast);
+  }, [dict, mutateProject, showToast]);
+
+  // Phase 2.3: Native Screen Eyedropper (Chromium EyeDropper API + fallback)
+  const handlePickEyedropperColor = useCallback(
+    async (targetCardId?: string) => {
+      if (!activeProject) return;
+      let pickedHex: string | null = null;
+      const EyeDropperCtor = (
+        window as unknown as {
+          EyeDropper?: new () => { open: () => Promise<{ sRGBHex: string }> };
+        }
+      ).EyeDropper;
+
+      if (EyeDropperCtor) {
+        try {
+          const dropper = new EyeDropperCtor();
+          const res = await dropper.open();
+          pickedHex = normalizeHex(res.sRGBHex);
+        } catch {
+          return; // User cancelled with Esc
+        }
+      } else {
+        const imgCard =
+          activeProject.cards.find((c) => selectedIds.includes(c.id) && c.kind === 'image') ??
+          activeProject.cards.find((c) => !c.inbox && c.kind === 'image');
+        if (imgCard?.dominantHex) {
+          pickedHex = imgCard.dominantHex;
+        } else if (imgCard?.assetId) {
+          const b = await getAssetBlob(imgCard.assetId, true);
+          if (b) {
+            const p = await extractPaletteFromBlob(b, 1);
+            pickedHex = p[0]?.hex ?? '#8D9A7C';
+          }
+        }
+      }
+
+      if (!pickedHex) return;
+
+      if (targetCardId) {
+        mutateProject(
+          activeProject.id,
+          (p) => ({
+            ...p,
+            cards: p.cards.map((c) => (c.id === targetCardId ? { ...c, color: pickedHex! } : c)),
+          }),
+          { recordUndo: true }
+        );
+        showToast(`${dict.eyedropperFallbackToast} (${pickedHex})`);
+        return;
+      }
+
+      const pt = getViewportCenterWorld();
+      const now = new Date().toISOString();
+      const card: Card = {
+        id: createId('crd'),
+        kind: 'color',
+        title: pickedHex,
+        text: '',
+        color: pickedHex,
+        category: 'palette',
+        x: Math.round(pt.x - 84),
+        y: Math.round(pt.y - 50),
+        w: 168,
+        h: 100,
+        z: getNextZ(activeProject.cards),
+        inbox: false,
+        locked: false,
+        createdAt: now,
+        updatedAt: now,
+      };
+      mutateProject(activeProject.id, (p) => ({ ...p, cards: [...p.cards, card] }), {
+        recordUndo: true,
+      });
+      setSelectedIds([card.id]);
+      showToast(`${dict.eyedropperFallbackToast} (${pickedHex})`);
+    },
+    [activeProject, dict, getViewportCenterWorld, mutateProject, selectedIds, showToast]
+  );
+
+  // Phase 4.1: On-Device AI Object Background Removal (Cutout Worker with immediate RAM release)
+  const handleRunAiCutout = useCallback(
+    async (card: Card) => {
+      if (!activeProject || card.kind !== 'image' || !card.assetId || cuttingOutCardId) return;
+      const pinnedProjectId = activeProject.id;
+      const sourceAssetId = card.originalAssetId ?? card.assetId;
+      setCuttingOutCardId(card.id);
+
+      try {
+        const rawBlob = await getAssetBlob(sourceAssetId, false);
+        if (!rawBlob) throw new Error(dict.aiMissingLocalImage);
+        const img = await decodeImageElement(rawBlob);
+        const maxEdge = 960;
+        const scale = Math.min(1, maxEdge / Math.max(1, img.naturalWidth, img.naturalHeight));
+        const w = Math.max(16, Math.round(img.naturalWidth * scale));
+        const h = Math.max(16, Math.round(img.naturalHeight * scale));
+
+        const canvas = document.createElement('canvas');
+        canvas.width = w;
+        canvas.height = h;
+        const ctx = canvas.getContext('2d');
+        if (!ctx) throw new Error('Canvas 2D unavailable');
+        ctx.drawImage(img, 0, 0, w, h);
+        const imageData = ctx.getImageData(0, 0, w, h);
+        const buf = imageData.data.buffer.slice(0);
+
+        const worker = new Worker(
+          new URL('./workers/cutout.worker.ts', import.meta.url),
+          { type: 'module' }
+        );
+
+        const cutoutBlob = await new Promise<Blob>((resolve, reject) => {
+          const reqId = createId('cut');
+          worker.onmessage = (ev: MessageEvent<CutoutOutboundMessage>) => {
+            worker.terminate();
+            if (ev.data.type === 'error') {
+              reject(new Error(ev.data.reason));
+              return;
+            }
+            const outArr = new Uint8ClampedArray(ev.data.rgbaBuffer);
+            const outData = new ImageData(outArr, ev.data.width, ev.data.height);
+            ctx.clearRect(0, 0, w, h);
+            ctx.putImageData(outData, 0, 0);
+            canvas.toBlob(
+              (b) => (b ? resolve(b) : reject(new Error('PNG encode failed'))),
+              'image/png'
+            );
+          };
+          worker.onerror = (err) => {
+            worker.terminate();
+            reject(new Error(err.message || 'Cutout worker error'));
+          };
+          worker.postMessage(
+            { type: 'cutout', requestId: reqId, width: w, height: h, rgbaBuffer: buf },
+            [buf]
+          );
+        });
+
+        const fileName = `${card.title || 'Cutout'}-cutout.png`;
+        const newMeta = await putImageAsset(cutoutBlob, fileName);
+
+        mutateProject(
+          pinnedProjectId,
+          (p) => ({
+            ...p,
+            cards: p.cards.map((c) =>
+              c.id === card.id
+                ? {
+                    ...c,
+                    assetId: newMeta.id,
+                    originalAssetId: sourceAssetId,
+                    cutout: true,
+                    framed: false,
+                  }
+                : c
+            ),
+          }),
+          { recordUndo: true }
+        );
+        showToast(dict.aiCutoutDoneToast);
+      } catch (err) {
+        showToast(err instanceof Error ? err.message : dict.aiCutoutErrorToast, true);
+      } finally {
+        setCuttingOutCardId(null);
+      }
+    },
+    [activeProject, cuttingOutCardId, dict, mutateProject, showToast]
+  );
+
+  const handleRestoreOriginalBg = useCallback(
+    (card: Card) => {
+      if (!activeProject || !card.originalAssetId) return;
+      mutateProject(
+        activeProject.id,
+        (p) => ({
+          ...p,
+          cards: p.cards.map((c) =>
+            c.id === card.id
+              ? { ...c, assetId: card.originalAssetId, cutout: undefined }
+              : c
+          ),
+        }),
+        { recordUndo: true }
+      );
+    },
+    [activeProject, mutateProject]
+  );
+
+  // Phase 1.2: Copy crisp PNG (PURE 'image/png' ClipboardItem so Adobe Illustrator, Photoshop & Canva all paste natively!)
+  const handleCopyImageForApps = useCallback(
+    async (singleCard?: Card) => {
+      if (!activeProject) return;
+      const targetCards = singleCard
+        ? [singleCard]
+        : activeProject.cards.filter((c) => selectedIds.includes(c.id) && !c.inbox);
+      if (targetCards.length === 0) return;
+
+      const buildCleanPngBlob = async (): Promise<Blob> => {
+        if (targetCards.length === 1 && targetCards[0].kind === 'image' && targetCards[0].assetId) {
+          const card = targetCards[0];
+          const rawBlob = await getAssetBlob(card.assetId!, false);
+          if (rawBlob) {
+            const img = await decodeImageElement(rawBlob);
+            const crop = card.crop;
+            const sx = crop ? Math.round(crop.x * img.naturalWidth) : 0;
+            const sy = crop ? Math.round(crop.y * img.naturalHeight) : 0;
+            const sw = crop ? Math.max(1, Math.round(crop.w * img.naturalWidth)) : img.naturalWidth;
+            const sh = crop ? Math.max(1, Math.round(crop.h * img.naturalHeight)) : img.naturalHeight;
+
+            const canvas = document.createElement('canvas');
+            canvas.width = sw;
+            canvas.height = sh;
+            const ctx = canvas.getContext('2d');
+            if (ctx) {
+              if (card.flipH) {
+                ctx.translate(sw, 0);
+                ctx.scale(-1, 1);
+              }
+              ctx.drawImage(img, sx, sy, sw, sh, 0, 0, sw, sh);
+              const cleanBlob = await new Promise<Blob | null>((res) =>
+                canvas.toBlob((b) => res(b), 'image/png')
+              );
+              canvas.width = 0;
+              canvas.height = 0;
+              if (cleanBlob) {
+                internalClipboardRef.current = {
+                  cards: targetCards,
+                  pngSize: cleanBlob.size,
+                  copiedAt: Date.now(),
+                };
+                return cleanBlob;
+              }
+            }
+          }
+        }
+
+        const composite = await renderMoodboardPng(activeProject, targetCards, {
+          scope: 'selection',
+          scale: 2,
+          includeBackground: false,
+          includeSourcesJson: false,
+        });
+        internalClipboardRef.current = {
+          cards: targetCards,
+          pngSize: composite.size,
+          copiedAt: Date.now(),
+        };
+        return composite;
+      };
+
+      const jsonPayload = JSON.stringify({ marker: CLIPBOARD_MARKER, cards: targetCards });
+      try {
+        if (typeof ClipboardItem !== 'undefined' && navigator.clipboard?.write) {
+          // Pass Promise<Blob> synchronously inside user gesture & omit 'text/plain' so Illustrator doesn't abort on CF_UNICODETEXT!
+          const pngPromise = buildCleanPngBlob();
+          await navigator.clipboard.write([
+            new ClipboardItem({
+              'image/png': pngPromise,
+            }),
+          ]);
+          showToast(dict.copiedPngToast);
+          return;
+        }
+      } catch {
+        // Fallback to text clipboard if image rendering or permission fails
+      }
+      navigator.clipboard?.writeText(jsonPayload).catch(() => undefined);
+    },
+    [activeProject, dict.copiedPngToast, selectedIds, showToast]
+  );
+
+  // Phase 3.1: Connect / Clear Milanote-style Minimalist Callout Lines
+  const handleConnectSelected = useCallback(() => {
+    if (!activeProject || selectedIds.length < 2) return;
+    mutateProject(
+      activeProject.id,
+      (p) => {
+        const linkMap = new Map<string, Set<string>>();
+        for (let i = 0; i < selectedIds.length - 1; i++) {
+          const a = selectedIds[i];
+          const b = selectedIds[i + 1];
+          const existing = p.cards.find((c) => c.id === a)?.linksTo ?? [];
+          const set = linkMap.get(a) ?? new Set(existing);
+          set.add(b);
+          linkMap.set(a, set);
+        }
+        return {
+          ...p,
+          cards: p.cards.map((c) => {
+            const updated = linkMap.get(c.id);
+            return updated ? { ...c, linksTo: [...updated] } : c;
+          }),
+        };
+      },
+      { recordUndo: true }
+    );
+  }, [activeProject, mutateProject, selectedIds]);
+
+  const handleClearConnections = useCallback(() => {
+    if (!activeProject || selectedIds.length === 0) return;
+    const selSet = new Set(selectedIds);
+    mutateProject(
+      activeProject.id,
+      (p) => ({
+        ...p,
+        cards: p.cards.map((c) =>
+          selSet.has(c.id)
+            ? { ...c, linksTo: undefined }
+            : c.linksTo
+              ? { ...c, linksTo: c.linksTo.filter((id) => !selSet.has(id)) }
+              : c
+        ),
+      }),
+      { recordUndo: true }
+    );
+  }, [activeProject, mutateProject, selectedIds]);
+
+  const handleToggleConnectorPair = useCallback(
+    (srcId: string, dstId: string) => {
+      if (!activeProject || srcId === dstId) return;
+      mutateProject(
+        activeProject.id,
+        (p) => ({
+          ...p,
+          cards: p.cards.map((c) => {
+            if (c.id !== srcId) return c;
+            const list = c.linksTo ?? [];
+            const exists = list.includes(dstId);
+            const next = exists ? list.filter((id) => id !== dstId) : [...list, dstId];
+            return { ...c, linksTo: next.length > 0 ? next : undefined };
+          }),
+        }),
+        { recordUndo: true }
+      );
+    },
+    [activeProject, mutateProject]
+  );
+
+  const handleRemoveConnector = useCallback(
+    (srcId: string, dstId: string) => {
+      if (!activeProject) return;
+      mutateProject(
+        activeProject.id,
+        (p) => ({
+          ...p,
+          cards: p.cards.map((c) => {
+            if (c.id !== srcId || !c.linksTo) return c;
+            const next = c.linksTo.filter((id) => id !== dstId);
+            return { ...c, linksTo: next.length > 0 ? next : undefined };
+          }),
+        }),
+        { recordUndo: true }
+      );
+    },
+    [activeProject, mutateProject]
+  );
+
   // Card field updates
   const handleChangeCard = useCallback(
     (cardId: string, patch: Partial<Card>, recordUndo = false) => {
@@ -975,7 +1722,7 @@ export const App: React.FC = () => {
     [handleChangeCard]
   );
 
-  // Z-Order & Alignment
+  // Z-Order & Alignment (steps cleanly past the nearest overlapping card so every keypress gives instant visual feedback)
   const handleStepZ = useCallback(
     (dir: 'forward' | 'backward') => {
       if (!activeProject || selectedIds.length === 0) return;
@@ -983,16 +1730,90 @@ export const App: React.FC = () => {
       mutateProject(
         activeProject.id,
         (p) => {
-          const zs = p.cards.filter((c) => !c.inbox).map((c) => c.z);
-          const maxZ = zs.length ? Math.max(...zs) : 1;
-          const minZ = zs.length ? Math.min(...zs) : 1;
-          return {
-            ...p,
-            cards: p.cards.map((c) => {
-              if (!selSet.has(c.id) || c.locked) return c;
-              return { ...c, z: dir === 'forward' ? maxZ + 1 : Math.max(1, minZ - 1) };
-            }),
-          };
+          const boardCards = p.cards.filter((c) => !c.inbox);
+          const ordered = [...boardCards].sort((a, b) => a.z - b.z || a.id.localeCompare(b.id));
+          const movableSel = ordered.filter((c) => selSet.has(c.id) && !c.locked);
+          if (movableSel.length === 0) return p;
+
+          const overlapsAnySelected = (other: Card) =>
+            movableSel.some(
+              (s) =>
+                !(
+                  s.x + s.w < other.x ||
+                  other.x + other.w < s.x ||
+                  s.y + s.h < other.y ||
+                  other.y + other.h < s.y
+                )
+            );
+
+          const remaining = ordered.filter((c) => !selSet.has(c.id) || c.locked);
+          const selIndices = ordered
+            .map((c, idx) => (selSet.has(c.id) && !c.locked ? idx : -1))
+            .filter((idx) => idx >= 0);
+
+          let reordered: Card[];
+          if (dir === 'forward') {
+            const maxSelIdx = Math.max(...selIndices);
+            // Find the nearest overlapping card currently above the selection
+            let targetAfterId: string | null = null;
+            for (let i = maxSelIdx + 1; i < ordered.length; i++) {
+              const cand = ordered[i];
+              if (cand.kind !== 'frame' && overlapsAnySelected(cand)) {
+                targetAfterId = cand.id;
+                break;
+              }
+            }
+            if (targetAfterId) {
+              const insertAt = remaining.findIndex((c) => c.id === targetAfterId) + 1;
+              reordered = [
+                ...remaining.slice(0, insertAt),
+                ...movableSel,
+                ...remaining.slice(insertAt),
+              ];
+            } else {
+              reordered = [...remaining, ...movableSel];
+            }
+          } else {
+            const minSelIdx = Math.min(...selIndices);
+            // Find the nearest overlapping card currently below the selection
+            let targetBeforeId: string | null = null;
+            for (let i = minSelIdx - 1; i >= 0; i--) {
+              const cand = ordered[i];
+              if (cand.kind !== 'frame' && overlapsAnySelected(cand)) {
+                targetBeforeId = cand.id;
+                break;
+              }
+            }
+            if (targetBeforeId) {
+              const insertAt = remaining.findIndex((c) => c.id === targetBeforeId);
+              reordered = [
+                ...remaining.slice(0, insertAt),
+                ...movableSel,
+                ...remaining.slice(insertAt),
+              ];
+            } else {
+              reordered = [...movableSel, ...remaining];
+            }
+          }
+
+          // Assign strictly unique sequential z-indices (2, 3, 4, ...) and keep frames behind members
+          const zMap = new Map<string, number>();
+          reordered.forEach((c, idx) => zMap.set(c.id, idx + 2));
+
+          const withNewZ = p.cards.map((c) => {
+            const nz = zMap.get(c.id);
+            return nz !== undefined ? { ...c, z: nz } : c;
+          });
+
+          const fixedFrames = withNewZ.map((c) => {
+            if (c.kind !== 'frame') return c;
+            const members = withNewZ.filter((m) => m.groupId === c.id && !m.inbox);
+            if (members.length === 0) return c;
+            const minMemberZ = Math.min(...members.map((m) => m.z));
+            return c.z >= minMemberZ ? { ...c, z: Math.max(1, minMemberZ - 1) } : c;
+          });
+
+          return { ...p, cards: fixedFrames };
         },
         { recordUndo: true }
       );
@@ -1000,16 +1821,23 @@ export const App: React.FC = () => {
     [activeProject, mutateProject, selectedIds]
   );
 
+  const triggerArrangeSpring = useCallback(() => {
+    setArrangeAnimating(true);
+    if (arrangeAnimTimerRef.current) window.clearTimeout(arrangeAnimTimerRef.current);
+    arrangeAnimTimerRef.current = window.setTimeout(() => setArrangeAnimating(false), 420);
+  }, []);
+
   const handleAlign = useCallback(
-    (mode: 'left' | 'top' | 'distribute-h') => {
+    (mode: AlignMode) => {
       if (!activeProject) return;
       const nextCards = alignSelectedCards(activeProject.cards, selectedIds, mode);
       if (!nextCards) return;
+      triggerArrangeSpring();
       mutateProject(activeProject.id, (p) => ({ ...p, cards: nextCards }), {
         recordUndo: true,
       });
     },
-    [activeProject, mutateProject, selectedIds]
+    [activeProject, mutateProject, selectedIds, triggerArrangeSpring]
   );
 
   const handleToggleLockSelected = useCallback(() => {
@@ -1026,19 +1854,63 @@ export const App: React.FC = () => {
     );
   }, [activeProject, mutateProject, selectedCards, selectedIds]);
 
-  // Arrange Preview & Apply
+  // Arrange Preview & Apply (always reads latest projectsRef so freshly applied AI labels take effect immediately)
   const handleArrangePreview = useCallback(
     (opts: ArrangeOptions) => {
-      if (!activeProject) return;
-      setArrangePreviewCards(computeArrangedCards(activeProject.cards, selectedIds, opts));
+      const proj = projectsRef.current.find((p) => p.id === activeProjectIdRef.current);
+      if (!proj) return;
+      triggerArrangeSpring();
+      const nextCards = computeArrangedCards(proj.cards, selectedIds, opts);
+      setArrangePreviewCards(nextCards);
+
+      // Frame live preview cleanly in the unobstructed left canvas when opening, changing mode, or shuffling
+      const fitKey = `${proj.id}|${opts.mode}|${opts.seed ?? 0}`;
+      if (lastPreviewFitKeyRef.current !== fitKey) {
+        lastPreviewFitKeyRef.current = fitKey;
+        const boardCards = nextCards.filter((c) => !c.inbox);
+        const fitted = fitWorkspaceView(
+          boardCards,
+          viewportSize.width,
+          viewportSize.height,
+          false,
+          360
+        );
+        handleViewChange(fitted, false);
+      }
     },
-    [activeProject, selectedIds]
+    [handleViewChange, selectedIds, triggerArrangeSpring, viewportSize.height, viewportSize.width]
   );
 
   const handleArrangeApply = useCallback(
-    (opts: ArrangeOptions) => {
-      if (!activeProject) return;
-      const arranged = computeArrangedCards(activeProject.cards, selectedIds, opts);
+    (
+      opts: ArrangeOptions,
+      pendingAiUpdates?: Array<{
+        cardId: string;
+        assetId: string;
+        originalCategory: Category;
+        newCategory: Category;
+      }>
+    ) => {
+      const proj = projectsRef.current.find((p) => p.id === activeProjectIdRef.current);
+      if (!proj) return;
+      triggerArrangeSpring();
+
+      // If user clicked the main "Áp dụng" button while AI suggestions are waiting in review,
+      // apply those AI labels first so both labels + layout commit atomically!
+      let baseCards = proj.cards;
+      let appliedAiCount = 0;
+      if (pendingAiUpdates && pendingAiUpdates.length > 0) {
+        const updMap = new Map(pendingAiUpdates.map((u) => [u.cardId, u]));
+        baseCards = proj.cards.map((c) => {
+          const u = updMap.get(c.id);
+          if (!u) return c;
+          if (c.assetId !== u.assetId || c.category !== u.originalCategory) return c;
+          appliedAiCount++;
+          return { ...c, category: u.newCategory, aiClassifiedAssetId: c.assetId };
+        });
+      }
+
+      const arranged = computeArrangedCards(baseCards, selectedIds, opts);
       setArrangePreviewCards(null);
       const nextView =
         selectedIds.length === 0
@@ -1048,14 +1920,17 @@ export const App: React.FC = () => {
               viewportSize.height,
               54
             )
-          : activeProject.view;
+          : proj.view;
       mutateProject(
-        activeProject.id,
+        proj.id,
         (p) => ({ ...p, cards: arranged, view: nextView }),
         { recordUndo: true }
       );
+      if (appliedAiCount > 0) {
+        showToast(dict.aiAppliedAndArranged(appliedAiCount));
+      }
     },
-    [activeProject, mutateProject, selectedIds, viewportSize.height, viewportSize.width]
+    [dict, mutateProject, selectedIds, showToast, triggerArrangeSpring, viewportSize.height, viewportSize.width]
   );
 
   // AI Classification Apply (W17: respects projectId, deleted/replaced/manually-changed cards)
@@ -1085,7 +1960,7 @@ export const App: React.FC = () => {
           return c;
         }
         applied++;
-        return { ...c, category: u.newCategory };
+        return { ...c, category: u.newCategory, aiClassifiedAssetId: c.assetId };
       });
 
       if (applied > 0) {
@@ -1094,15 +1969,13 @@ export const App: React.FC = () => {
         });
       }
       if (skippedChanged > 0) {
-        showToast(
-          `Đã áp dụng ${applied} nhãn (bỏ qua ${skippedChanged} mục đã đổi thủ công/đổi ảnh).`
-        );
+        showToast(dict.aiAppliedPartial(applied, skippedChanged));
       } else if (applied > 0) {
-        showToast(`Đã áp dụng ${applied} nhãn phân loại AI.`);
+        showToast(dict.aiAppliedLabels(applied));
       }
       return { applied, skippedChanged };
     },
-    [mutateProject, showToast]
+    [dict, mutateProject, showToast]
   );
 
   // Search focus & scroll
@@ -1165,7 +2038,7 @@ export const App: React.FC = () => {
     selectedIds,
     presentMode,
     editingCardId,
-    modalOpen: anyModalOpen,
+    modalOpen: blockingModalOpen,
     onViewChange: handleViewChange,
     onSelectChange: (ids) => {
       setSelectedIds(ids);
@@ -1179,15 +2052,22 @@ export const App: React.FC = () => {
     },
     onStartEditNote: (cardId) => setEditingCardId(cardId),
     onCreateNoteAt: createNoteAt,
+    onOpenFileCard: (card) => void handleOpenFileCard(card),
+    onOpenLightbox: (card) => setLightboxCardId(card.id),
   });
 
   // Global keyboard shortcuts & paste handler (W04, W05, Section 4 & 5)
   useEffect(() => {
     const isTextInputFocused = (target: EventTarget | null): boolean => {
-      const el = target as HTMLElement | null;
+      const el = (target as HTMLElement | null) ?? (document.activeElement as HTMLElement | null);
       if (!el) return false;
       const tag = el.tagName;
-      return tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || el.isContentEditable;
+      if (tag === 'TEXTAREA' || el.isContentEditable) return true;
+      if (tag === 'INPUT') {
+        const type = ((el as HTMLInputElement).type || 'text').toLowerCase();
+        return !['checkbox', 'radio', 'range', 'color', 'button', 'submit', 'reset', 'file'].includes(type);
+      }
+      return false;
     };
 
     const onKeyDown = (e: KeyboardEvent) => {
@@ -1198,6 +2078,16 @@ export const App: React.FC = () => {
         if (presentMode) {
           e.preventDefault();
           exitPresentMode();
+          return;
+        }
+        if (connectMode) {
+          setConnectMode(false);
+          setConnectSourceId(null);
+          setConnectCursorWorld(null);
+          return;
+        }
+        if (croppingCardId) {
+          setCroppingCardId(null);
           return;
         }
         if (editingCardId) {
@@ -1218,6 +2108,16 @@ export const App: React.FC = () => {
 
       const mod = e.ctrlKey || e.metaKey;
 
+      // Phase 2.2: Alt + G toggles PureRef Grayscale Value Check
+      if (e.altKey && !mod && e.key.toLowerCase() === 'g' && activeProject) {
+        e.preventDefault();
+        handleChangeAppearance({
+          ...activeProject.appearance,
+          grayscale: !activeProject.appearance.grayscale,
+        });
+        return;
+      }
+
       if (mod && e.key.toLowerCase() === 'z') {
         e.preventDefault();
         if (e.shiftKey) handleRedo();
@@ -1227,6 +2127,26 @@ export const App: React.FC = () => {
       if (mod && e.key.toLowerCase() === 'y') {
         e.preventDefault();
         handleRedo();
+        return;
+      }
+      if (mod && e.altKey && (e.code === 'BracketLeft' || e.key === '[')) {
+        if (selectedIds.length > 0) {
+          e.preventDefault();
+          handleStepZ('forward');
+        }
+        return;
+      }
+      if (mod && e.altKey && (e.code === 'BracketRight' || e.key === ']')) {
+        if (selectedIds.length > 0) {
+          e.preventDefault();
+          handleStepZ('backward');
+        }
+        return;
+      }
+      if (mod && !e.altKey && !e.shiftKey && e.key.toLowerCase() === 'a' && activeProject) {
+        e.preventDefault();
+        const allBoardIds = activeProject.cards.filter((c) => !c.inbox).map((c) => c.id);
+        setSelectedIds(allBoardIds);
         return;
       }
       if (mod && e.key.toLowerCase() === 'd') {
@@ -1242,17 +2162,37 @@ export const App: React.FC = () => {
         }
         const payload = activeProject.cards.filter((c) => copySet.has(c.id) && !c.inbox);
         if (payload.length > 0) {
-          navigator.clipboard
-            ?.writeText(JSON.stringify({ marker: CLIPBOARD_MARKER, cards: payload }))
-            .catch(() => undefined);
+          const hasVisual = payload.some((c) => c.kind === 'image' || payload.length > 1);
+          if (hasVisual) {
+            void handleCopyImageForApps(payload.length === 1 ? payload[0] : undefined);
+          } else {
+            navigator.clipboard
+              ?.writeText(JSON.stringify({ marker: CLIPBOARD_MARKER, cards: payload }))
+              .catch(() => undefined);
+          }
         }
         return;
       }
-      if (e.key === 'Delete' || e.key === 'Backspace') {
+      if (
+        e.key === 'Delete' ||
+        e.key === 'Del' ||
+        e.code === 'Delete' ||
+        e.key === 'Backspace' ||
+        (e.code === 'NumpadDecimal' && e.key === 'Delete')
+      ) {
         if (selectedIds.length > 0) {
           e.preventDefault();
           handleDeleteIdsToTrash(selectedIds);
         }
+        return;
+      }
+      if (
+        !mod &&
+        (e.key.toLowerCase() === 'm' || e.key.toLowerCase() === 'g') &&
+        selectedIds.length > 0
+      ) {
+        e.preventDefault();
+        interactions.startStickyMove();
         return;
       }
       if (
@@ -1293,30 +2233,10 @@ export const App: React.FC = () => {
         proj.view
       );
 
-      // 1. Clipboard image files
-      const imgFiles: File[] = [];
-      for (const item of Array.from(e.clipboardData.items)) {
-        if (item.kind === 'file' && item.type.startsWith('image/')) {
-          const f = item.getAsFile();
-          if (f) imgFiles.push(f);
-        }
-      }
-      if (imgFiles.length > 0) {
-        e.preventDefault();
-        const res = await importFilesAsCards(imgFiles, {
-          inbox: false,
-          worldPoint: { x: center.x - 140, y: center.y - 100 },
-          baseZ: getNextZ(proj.cards),
-          method: 'paste',
-        });
-        appendImportedCards(pid, res.cards, res.errors);
-        return;
-      }
-
       const text = e.clipboardData.getData('text/plain').trim();
-      if (!text) return;
+      const html = e.clipboardData.getData('text/html').trim();
 
-      // 2. Internal 0Y03 cards copy/paste (W04)
+      // 1. Internal 0Y03 cards copy/paste (checked first so dual PNG+JSON ClipboardItem pastes native cards inside 0Y03!)
       if (text.includes(CLIPBOARD_MARKER)) {
         try {
           const parsed = JSON.parse(text) as { marker?: string; cards?: Card[] };
@@ -1347,11 +2267,119 @@ export const App: React.FC = () => {
             return;
           }
         } catch {
-          // Fall through to plain text
+          // Fall through
         }
       }
 
-      // 3. HTTP/HTTPS URL -> Link card (or image card)
+      // 2. Vector SVG pasted from Adobe Illustrator / Figma / Canva (<svg...>)
+      const svgMarkup = extractInlineSvg(text) || extractInlineSvg(html);
+      if (svgMarkup) {
+        e.preventDefault();
+        const res = await importInlineSvgAsCard(svgMarkup, {
+          title: dict.importedSvgVector,
+          inbox: false,
+          worldPoint: { x: center.x - 130, y: center.y - 100 },
+          baseZ: getNextZ(proj.cards),
+          method: 'paste',
+        });
+        appendImportedCards(pid, res.cards, res.errors);
+        return;
+      }
+
+      // 3. Clipboard files (raster images from Photoshop / Canva / Snipping Tool or internal 0Y03 PNG copy)
+      const pastedFiles: File[] = [];
+      for (const item of Array.from(e.clipboardData.items)) {
+        if (item.kind === 'file') {
+          const f = item.getAsFile();
+          if (f) pastedFiles.push(f);
+        }
+      }
+      if (pastedFiles.length > 0) {
+        e.preventDefault();
+        const mem = internalClipboardRef.current;
+        if (
+          pastedFiles.length === 1 &&
+          !text &&
+          !html &&
+          mem &&
+          Math.abs(pastedFiles[0].size - mem.pngSize) <= 16 &&
+          Date.now() - mem.copiedAt < 180_000
+        ) {
+          const now = new Date().toISOString();
+          let z = getNextZ(proj.cards);
+          const idMap = new Map<string, string>();
+          for (const c of mem.cards) {
+            idMap.set(c.id, createId(c.kind === 'frame' ? 'frm' : 'crd'));
+          }
+          const pasted: Card[] = mem.cards.map((c) => ({
+            ...c,
+            id: idMap.get(c.id)!,
+            groupId: c.groupId ? idMap.get(c.groupId) : undefined,
+            x: c.x + 28,
+            y: c.y + 28,
+            z: c.kind === 'frame' ? z : ++z,
+            inbox: false,
+            locked: false,
+            createdAt: now,
+            updatedAt: now,
+          }));
+          mutateProject(pid, (p) => ({ ...p, cards: [...p.cards, ...pasted] }), {
+            recordUndo: true,
+          });
+          setSelectedIds(pasted.map((c) => c.id));
+          return;
+        }
+
+        const res = await importFilesAsCards(pastedFiles, {
+          inbox: false,
+          worldPoint: { x: center.x - 140, y: center.y - 100 },
+          baseZ: getNextZ(proj.cards),
+          method: 'paste',
+        });
+        appendImportedCards(pid, res.cards, res.errors);
+        return;
+      }
+
+      // 4. HTML image/background pasted from Canva Web or browser
+      if (html) {
+        const parsedHtml = parseDroppedHtml(html);
+        if (parsedHtml.dataUrl) {
+          e.preventDefault();
+          const res = await importDataUrlAsCard(parsedHtml.dataUrl, {
+            title: parsedHtml.alt,
+            pageUrl: parsedHtml.pageUrl,
+            inbox: false,
+            worldPoint: { x: center.x - 140, y: center.y - 100 },
+            baseZ: getNextZ(proj.cards),
+            method: 'paste',
+          });
+          appendImportedCards(pid, res.cards, res.errors);
+          return;
+        }
+        if (parsedHtml.imageUrl) {
+          e.preventDefault();
+          const res = await importUrlAsCard(parsedHtml.imageUrl, {
+            title: parsedHtml.alt,
+            pageUrl: parsedHtml.pageUrl,
+            tryAsImage: true,
+            inbox: false,
+            worldPoint: { x: center.x - 140, y: center.y - 100 },
+            baseZ: getNextZ(proj.cards),
+            method: 'paste',
+          });
+          appendImportedCards(pid, res.cards, res.errors);
+          return;
+        }
+        if (!text && /canva/i.test(html)) {
+          e.preventDefault();
+          showToast(dict.canvaInternalCopyHint, true);
+          return;
+        }
+      }
+
+      if (!text) return;
+
+      // 5. HTTP/HTTPS URL -> Link card (or image card)
       if (isValidHttpUrl(text)) {
         e.preventDefault();
         const res = await importUrlAsCard(text, {
@@ -1371,7 +2399,7 @@ export const App: React.FC = () => {
       const note: Card = {
         id: createId('crd'),
         kind: 'note',
-        title: 'Ghi chú dán',
+        title: dict.defaultPastedNoteTitle,
         text: text.slice(0, 2000),
         color: '#FAF7EE',
         category: 'other',
@@ -1400,11 +2428,19 @@ export const App: React.FC = () => {
     activeProject,
     anyModalOpen,
     appendImportedCards,
+    connectMode,
+    croppingCardId,
+    dict.canvaInternalCopyHint,
+    dict.defaultPastedNoteTitle,
+    dict.importedSvgVector,
     editingCardId,
     exitPresentMode,
+    handleChangeAppearance,
+    handleCopyImageForApps,
     handleDeleteIdsToTrash,
     handleDuplicateIds,
     handleRedo,
+    handleStepZ,
     handleUndo,
     interactions,
     moreMenuOpen,
@@ -1415,12 +2451,59 @@ export const App: React.FC = () => {
     viewportSize.width,
   ]);
 
+  // Phase 4.2 & 2.4: Visual Similarity / Duplicate Detection & Smart Filter Dimming
+  const duplicateIds = useMemo(() => {
+    const dup = new Set<string>();
+    if (!activeProject) return dup;
+    const imgs = activeProject.cards.filter((c) => !c.inbox && c.kind === 'image');
+    for (let i = 0; i < imgs.length; i++) {
+      for (let j = i + 1; j < imgs.length; j++) {
+        const a = imgs[i];
+        const b = imgs[j];
+        const sameAsset = Boolean(a.assetId && a.assetId === b.assetId);
+        const sameFile = Boolean(
+          a.source?.fileName &&
+            b.source?.fileName &&
+            a.source.fileName.toLowerCase() === b.source.fileName.toLowerCase()
+        );
+        const nearVisual =
+          Boolean(a.dominantHex && b.dominantHex) &&
+          hexColorDistance(a.dominantHex, b.dominantHex) <= 14 &&
+          Math.abs(a.w / Math.max(1, a.h) - b.w / Math.max(1, b.h)) <= 0.08;
+        if (sameAsset || sameFile || nearVisual) {
+          dup.add(a.id);
+          dup.add(b.id);
+        }
+      }
+    }
+    return dup;
+  }, [activeProject]);
+
+  const dimmedCardIds = useMemo(() => {
+    if (!activeProject) return null;
+    const { category, colorHex, duplicatesOnly } = boardFilter;
+    if (!category && !colorHex && !duplicatesOnly) return null;
+    const dimmed = new Set<string>();
+    for (const c of activeProject.cards) {
+      if (c.inbox || c.kind === 'frame') continue;
+      let match = true;
+      if (category && c.category !== category) match = false;
+      if (colorHex) {
+        const cardHex = c.kind === 'color' ? c.color : c.dominantHex || c.color;
+        if (!cardHex || hexColorDistance(cardHex, colorHex) > 48) match = false;
+      }
+      if (duplicatesOnly && !duplicateIds.has(c.id)) match = false;
+      if (!match) dimmed.add(c.id);
+    }
+    return dimmed;
+  }, [activeProject, boardFilter, duplicateIds]);
+
   if (loading) {
     return (
       <div className="fatal-screen">
         <div className="fatal-card">
-          <strong>0Y03</strong>
-          <p className="field-hint">Đang tải không gian làm việc cục bộ…</p>
+          <strong className="brand-name brand-name--lg">{dict.appName}</strong>
+          <p className="field-hint">{dict.loadingWorkspace}</p>
         </div>
       </div>
     );
@@ -1451,13 +2534,20 @@ export const App: React.FC = () => {
           : dict.saveUnsaved;
 
   return (
-    <div className={`app-root ${darkTheme ? 'theme-dark' : ''}`}>
-      {/* Hidden file inputs */}
+    <div
+      className={`app-root ${darkTheme ? 'theme-dark' : ''}`}
+      onContextMenu={(e) => {
+        const el = e.target as HTMLElement | null;
+        const tag = el?.tagName;
+        if (tag === 'INPUT' || tag === 'TEXTAREA' || el?.isContentEditable) return;
+        e.preventDefault();
+      }}
+    >
+      {/* Hidden file inputs (supports ALL file extensions) */}
       <input
         ref={filePickerRef}
         type="file"
         multiple
-        accept="image/*,.dwg,.dxf,.psd,.ai,.indd,.skp,.3dm,.rvt,.max"
         hidden
         onChange={(e) => {
           void handleFilesSelected(e.target.files);
@@ -1474,6 +2564,15 @@ export const App: React.FC = () => {
           e.target.value = '';
         }}
       />
+      <input
+        ref={replaceFilePickerRef}
+        type="file"
+        hidden
+        onChange={(e) => {
+          void handleReplaceFilePicked(e.target.files);
+          e.target.value = '';
+        }}
+      />
 
       {/* Full-viewport interactive Artboard */}
       <BoardViewport
@@ -1484,22 +2583,108 @@ export const App: React.FC = () => {
         view={activeProject.view}
         selectedIds={selectedIds}
         editingCardId={editingCardId}
+        croppingCardId={croppingCardId}
         highlightedCardId={highlightedCardId}
+        dimmedCardIds={dimmedCardIds}
+        connectMode={connectMode}
+        connectSourceId={connectSourceId}
+        connectCursorWorld={connectCursorWorld}
         presentMode={presentMode}
+        isArranging={Boolean(arrangePreviewCards) || arrangeAnimating}
         spacePressed={interactions.spacePressed}
         draft={interactions.draft}
         dict={dict}
-        onPointerDown={interactions.handleBoardPointerDown}
-        onPointerMove={interactions.handlePointerMove}
+        onPointerDown={(e) => {
+          if (connectMode && e.button === 0 && !interactions.spacePressed) {
+            if (connectSourceId) {
+              setConnectSourceId(null);
+            } else {
+              setConnectMode(false);
+              setConnectCursorWorld(null);
+            }
+            return;
+          }
+          interactions.handleBoardPointerDown(e);
+        }}
+        onPointerMove={(e) => {
+          if (connectMode && boardRef.current) {
+            const rect = boardRef.current.getBoundingClientRect();
+            setConnectCursorWorld(
+              screenToWorld(
+                { x: e.clientX - rect.left, y: e.clientY - rect.top },
+                activeProject.view
+              )
+            );
+          }
+          interactions.handlePointerMove(e);
+        }}
         onPointerUp={interactions.handlePointerUp}
         onPointerCancel={interactions.handlePointerCancel}
         onDoubleClick={interactions.handleBoardDoubleClick}
-        onCardPointerDown={interactions.handleCardPointerDown}
+        onBoardContextMenu={(e, worldPoint) => {
+          setMoreMenuOpen(false);
+          setContextMenu({
+            screenX: e.clientX,
+            screenY: e.clientY,
+            worldPoint,
+            targetCardId: null,
+          });
+        }}
+        onCardPointerDown={(e, card) => {
+          if (connectMode && e.button === 0 && !interactions.spacePressed) {
+            e.stopPropagation();
+            if (card.kind === 'frame') return;
+            if (!connectSourceId) {
+              setConnectSourceId(card.id);
+              const rect = boardRef.current?.getBoundingClientRect();
+              if (rect) {
+                setConnectCursorWorld(
+                  screenToWorld(
+                    { x: e.clientX - rect.left, y: e.clientY - rect.top },
+                    activeProject.view
+                  )
+                );
+              }
+            } else if (connectSourceId === card.id) {
+              setConnectSourceId(null);
+            } else {
+              handleToggleConnectorPair(connectSourceId, card.id);
+              setConnectSourceId(null);
+            }
+            return;
+          }
+          interactions.handleCardPointerDown(e, card);
+        }}
         onCardDoubleClick={interactions.handleCardDoubleClick}
+        onCardContextMenu={(e, card) => {
+          e.preventDefault();
+          e.stopPropagation();
+          if (presentMode || interactions.draft?.mode === 'sticky-move') return;
+          setMoreMenuOpen(false);
+          if (!selectedIds.includes(card.id)) {
+            setSelectedIds([card.id]);
+          }
+          setContextMenu({
+            screenX: e.clientX,
+            screenY: e.clientY,
+            worldPoint: { x: card.x, y: card.y },
+            targetCardId: card.id,
+          });
+        }}
         onResizePointerDown={interactions.handleResizePointerDown}
         onUpdateCardText={handleUpdateNoteText}
+        onChangeCrop={(cardId, crop) => handleChangeCard(cardId, { crop }, false)}
+        onFinishCrop={() => {
+          if (croppingCardId) {
+            const c = activeProject.cards.find((it) => it.id === croppingCardId);
+            if (c) handleChangeCard(c.id, { crop: c.crop }, true);
+          }
+          setCroppingCardId(null);
+        }}
         onFinishEdit={() => setEditingCardId(null)}
+        onRemoveConnector={handleRemoveConnector}
         onOpenLightbox={(c) => setLightboxCardId(c.id)}
+        onOpenFileCard={(c) => void handleOpenFileCard(c)}
         onTriggerReplaceImage={(c) => {
           replaceTargetCardRef.current = c;
           replacePickerRef.current?.click();
@@ -1514,10 +2699,16 @@ export const App: React.FC = () => {
         <>
           <header className="topbar">
             <div className="topbar-left">
-              <div className="brand-mark">
-                <img src={`${import.meta.env.BASE_URL}brand/logo.svg`} alt="" className="brand-logo" />
-                <span>{dict.appName}</span>
-              </div>
+              <button
+                type="button"
+                className="brand-mark brand-mark--btn"
+                title={dict.homeAllProjects}
+                aria-label={dict.homeAllProjects}
+                onClick={handleOpenProjectHub}
+              >
+                <img src={`${import.meta.env.BASE_URL}brand/logo.svg?v=6`} alt="Mosa" className="brand-logo" />
+                <span className="brand-name">{dict.appName}</span>
+              </button>
 
               <div className="topbar-project">
                 <ProjectMenu
@@ -1526,6 +2717,8 @@ export const App: React.FC = () => {
                   dict={dict}
                   onSelectProject={handleSelectProject}
                   onCreateProject={handleCreateProject}
+                  onDuplicateProject={(p) => void handleDuplicateProject(p)}
+                  onOpenProjectHub={handleOpenProjectHub}
                   onRenameProject={handleRenameProject}
                   onDeleteProject={(id) => void handleDeleteProject(id)}
                 />
@@ -1548,12 +2741,32 @@ export const App: React.FC = () => {
             </div>
 
             <div className="topbar-discover">
-              <SearchBar cards={activeProject.cards} dict={dict} onSelectResult={handleSearchSelect} />
+              <SearchBar
+                cards={activeProject.cards}
+                dict={dict}
+                filter={boardFilter}
+                duplicateIds={duplicateIds}
+                onChangeFilter={setBoardFilter}
+                onSelectResult={handleSearchSelect}
+              />
               <InboxPanel
                 open={inboxOpen}
                 inboxCards={inboxCards}
+                clipperBridgeReady={clipperBridgeReady}
                 dict={dict}
-                onToggle={() => setInboxOpen((v) => !v)}
+                onToggle={() =>
+                  setInboxOpen((v) => {
+                    const next = !v;
+                    if (next) {
+                      setSettingsOpen(false);
+                      setMoreMenuOpen(false);
+                      lastPreviewFitKeyRef.current = null;
+                      setArrangePreviewCards(null);
+                      setArrangeOpen(false);
+                    }
+                    return next;
+                  })
+                }
                 onMoveToBoard={(id) => handleMoveFromInboxToBoard(id)}
                 onDeleteCard={(id) => handleDeleteIdsToTrash([id])}
                 onDropExternalToInbox={(dt) => void handleDropExternal(dt, { x: 100, y: 100 }, true)}
@@ -1563,21 +2776,23 @@ export const App: React.FC = () => {
             <div className="topbar-right">
               <button
                 type="button"
-                className="btn topbar-ai-btn"
-                title={dict.aiClassify}
-                aria-label={dict.aiClassify}
-                onClick={() => setClassifyOpen(true)}
-              >
-                <Sparkles size={15} />
-                <span className="btn-label-md">{dict.aiClassify}</span>
-              </button>
-
-              <button
-                type="button"
-                className="btn topbar-arrange-btn"
+                className={`btn topbar-arrange-btn ${arrangeOpen ? 'is-active' : ''}`}
                 title={dict.arrangeBoard}
                 aria-label={dict.arrangeBoard}
-                onClick={() => setArrangeOpen(true)}
+                aria-expanded={arrangeOpen}
+                onClick={() => {
+                  if (arrangeOpen) {
+                    lastPreviewFitKeyRef.current = null;
+                    setArrangePreviewCards(null);
+                    setArrangeOpen(false);
+                  } else {
+                    setSettingsOpen(false);
+                    setMoreMenuOpen(false);
+                    setInboxOpen(false);
+                    setContextMenu(null);
+                    setArrangeOpen(true);
+                  }
+                }}
               >
                 <LayoutGrid size={15} />
                 <span className="btn-label-md">{dict.arrangeBoard}</span>
@@ -1590,17 +2805,39 @@ export const App: React.FC = () => {
                 className="icon-btn"
                 title={dict.present}
                 aria-label={dict.present}
-                onClick={enterPresentMode}
+                onClick={() => {
+                  lastPreviewFitKeyRef.current = null;
+                  setArrangePreviewCards(null);
+                  setArrangeOpen(false);
+                  setSettingsOpen(false);
+                  setMoreMenuOpen(false);
+                  setInboxOpen(false);
+                  enterPresentMode();
+                }}
               >
                 <Presentation size={17} />
               </button>
 
               <SettingsPopover
+                open={settingsOpen}
+                onOpenChange={(next) => {
+                  if (next) {
+                    lastPreviewFitKeyRef.current = null;
+                    setArrangePreviewCards(null);
+                    setArrangeOpen(false);
+                    setMoreMenuOpen(false);
+                    setInboxOpen(false);
+                    setContextMenu(null);
+                  }
+                  setSettingsOpen(next);
+                }}
                 appearance={activeProject.appearance}
                 language={language}
+                syncFolderName={syncFolderHandle?.name ?? null}
                 dict={dict}
                 onChangeAppearance={handleChangeAppearance}
                 onChangeLanguage={handleChangeLanguage}
+                onOpenStorageHub={() => setBackupOpen(true)}
               />
 
               {/* Secondary Menu: Export, Backup, Trash */}
@@ -1611,23 +2848,25 @@ export const App: React.FC = () => {
                   title={dict.moreMenu}
                   aria-label={dict.moreMenu}
                   aria-expanded={moreMenuOpen}
-                  onClick={() => setMoreMenuOpen((v) => !v)}
+                  onClick={() =>
+                    setMoreMenuOpen((v) => {
+                      const next = !v;
+                      if (next) {
+                        lastPreviewFitKeyRef.current = null;
+                        setArrangePreviewCards(null);
+                        setArrangeOpen(false);
+                        setSettingsOpen(false);
+                        setInboxOpen(false);
+                        setContextMenu(null);
+                      }
+                      return next;
+                    })
+                  }
                 >
                   <MoreHorizontal size={18} />
                 </button>
                 {moreMenuOpen && (
                   <div className="popover-panel popover-panel--right" role="menu">
-                    <button
-                      type="button"
-                      className="popover-action-btn compact-ai-action"
-                      onClick={() => {
-                        setMoreMenuOpen(false);
-                        setClassifyOpen(true);
-                      }}
-                    >
-                      <Sparkles size={15} />
-                      <span>{dict.aiClassify}</span>
-                    </button>
                     <button
                       type="button"
                       className="popover-action-btn"
@@ -1674,30 +2913,51 @@ export const App: React.FC = () => {
           <SelectionOverlay
             selectedCards={selectedCards}
             dict={dict}
+            onStartStickyMove={(e) => {
+              interactions.startStickyMove({ clientX: e.clientX, clientY: e.clientY });
+            }}
             onGroup={handleGroupSelected}
             onUngroup={() => handleUngroup()}
             onToggleLock={handleToggleLockSelected}
             onBringForward={() => handleStepZ('forward')}
             onSendBackward={() => handleStepZ('backward')}
-            onAlignLeft={() => handleAlign('left')}
-            onAlignTop={() => handleAlign('top')}
-            onDistributeH={() => handleAlign('distribute-h')}
+            onAlign={handleAlign}
             onDuplicate={() => handleDuplicateIds(selectedIds)}
             onMoveToInbox={() => handleMoveToInbox(selectedIds)}
             onDelete={() => handleDeleteIdsToTrash(selectedIds)}
           />
 
           {/* Right Inspector Panel when 1 card selected */}
-          {singleSelectedCard && !inboxOpen && !arrangeOpen && (
+          {singleSelectedCard && !inboxOpen && !arrangeOpen && !settingsOpen && !moreMenuOpen && (
             <InspectorPanel
               card={singleSelectedCard}
               dict={dict}
+              isCropping={croppingCardId === singleSelectedCard.id}
+              isCuttingOut={cuttingOutCardId === singleSelectedCard.id}
               onClose={() => setSelectedIds([])}
               onChangeCard={handleChangeCard}
+              onToggleCrop={(id) => {
+                setCroppingCardId((prev) => {
+                  if (prev === id) return null;
+                  if (!singleSelectedCard.crop) {
+                    handleChangeCard(id, { crop: { x: 0.08, y: 0.08, w: 0.84, h: 0.84 } }, true);
+                  }
+                  return id;
+                });
+              }}
+              onRunAiCutout={(c) => void handleRunAiCutout(c)}
+              onRestoreOriginalBg={handleRestoreOriginalBg}
+              onCopyImageForApps={(c) => void handleCopyImageForApps(c)}
+              onPickEyedropperColor={(tid) => void handlePickEyedropperColor(tid)}
               onOpenLightbox={(c) => setLightboxCardId(c.id)}
+              onOpenFileCard={(c) => void handleOpenFileCard(c)}
               onTriggerReplaceImage={(c) => {
                 replaceTargetCardRef.current = c;
                 replacePickerRef.current?.click();
+              }}
+              onTriggerReplaceFile={(c) => {
+                replaceTargetFileCardRef.current = c;
+                replaceFilePickerRef.current?.click();
               }}
               onExtractPalette={(c) => void handleExtractPalette(c)}
               onDuplicate={(id) => handleDuplicateIds([id])}
@@ -1710,10 +2970,11 @@ export const App: React.FC = () => {
           <footer className="workspace-footer">
             <button
               type="button"
-              className="shortcuts-corner-btn"
+              className={`shortcuts-corner-btn ${shortcutsOpen ? 'is-active' : ''}`}
               title={dict.shortcuts}
               aria-label={dict.shortcuts}
-              onClick={() => setShortcutsOpen(true)}
+              aria-expanded={shortcutsOpen}
+              onClick={() => setShortcutsOpen((v) => !v)}
             >
               <Keyboard size={14} />
               <span>{dict.shortcuts}</span>
@@ -1756,10 +3017,39 @@ export const App: React.FC = () => {
                 className="dock-btn"
                 title={dict.addColor}
                 aria-label={dict.addColor}
-                onClick={createColorCard}
+                onClick={() => createColorCard()}
               >
                 <Palette size={17} />
                 <span className="dock-label">{dict.addColor}</span>
+              </button>
+              <button
+                type="button"
+                className={`dock-btn ${connectMode ? 'is-active' : ''}`}
+                title={dict.addConnectorTitle}
+                aria-label={dict.addConnector}
+                aria-pressed={connectMode}
+                onClick={() => {
+                  if (connectMode) {
+                    setConnectMode(false);
+                    setConnectSourceId(null);
+                    setConnectCursorWorld(null);
+                    return;
+                  }
+                  if (selectedIds.length >= 2) {
+                    handleConnectSelected();
+                    return;
+                  }
+                  setConnectMode(true);
+                  const single =
+                    selectedIds.length === 1
+                      ? activeProject.cards.find((c) => c.id === selectedIds[0] && c.kind !== 'frame')
+                      : null;
+                  setConnectSourceId(single ? single.id : null);
+                  setConnectCursorWorld(null);
+                }}
+              >
+                <MoveUpRight size={17} />
+                <span className="dock-label">{dict.addConnector}</span>
               </button>
               <span className="toolbar-sep" aria-hidden="true" />
 
@@ -1846,46 +3136,79 @@ export const App: React.FC = () => {
         onSubmit={handleAddLinkSubmit}
       />
 
-      <ArrangeModal
-        open={arrangeOpen}
-        selectedCount={selectedIds.length}
-        dict={dict}
-        onPreview={handleArrangePreview}
-        onClearPreview={() => setArrangePreviewCards(null)}
-        onApply={handleArrangeApply}
-        onClose={() => setArrangeOpen(false)}
-      />
+      <Suspense fallback={null}>
+        {arrangeOpen && (
+          <ArrangeModal
+            open={arrangeOpen}
+            projectId={activeProject.id}
+            cards={activeProject.cards}
+            selectedIds={selectedIds}
+            dict={dict}
+            onPreview={handleArrangePreview}
+            onClearPreview={() => {
+              lastPreviewFitKeyRef.current = null;
+              setArrangePreviewCards(null);
+            }}
+            onApply={handleArrangeApply}
+            onApplyLabels={handleApplyAiLabels}
+            onGenerateBoardPalette={() => void handleGenerateBoardPalette()}
+            onClose={() => {
+              lastPreviewFitKeyRef.current = null;
+              setArrangePreviewCards(null);
+              setArrangeOpen(false);
+            }}
+          />
+        )}
 
-      <ClassifyModal
-        open={classifyOpen}
-        projectId={activeProject.id}
-        cards={activeProject.cards}
-        selectedIds={selectedIds}
-        dict={dict}
-        onClose={() => setClassifyOpen(false)}
-        onApplyLabels={handleApplyAiLabels}
-      />
+        {exportOpen && (
+          <ExportModal
+            open={exportOpen}
+            project={activeProject}
+            selectedIds={selectedIds}
+            studioProfile={meta?.studioProfile}
+            dict={dict}
+            onClose={() => setExportOpen(false)}
+            onChangeStudioProfile={handleChangeStudioProfile}
+            onExported={(msg) => showToast(msg)}
+          />
+        )}
 
-      <ExportModal
-        open={exportOpen}
-        project={activeProject}
-        selectedIds={selectedIds}
-        dict={dict}
-        onClose={() => setExportOpen(false)}
-        onExported={(msg) => showToast(msg)}
-      />
+        {backupOpen && (
+          <BackupModal
+            open={backupOpen}
+            project={activeProject}
+            allProjects={projects}
+            autoFolderSync={Boolean(meta?.autoFolderSync)}
+            dict={dict}
+            onClose={() => setBackupOpen(false)}
+            onImportedProject={(imported) => {
+              setProjects((list) => [imported, ...list]);
+              handleSelectProject(imported.id);
+              showToast(dict.projectImportedToast(imported.name));
+            }}
+            onChangeAutoFolderSync={handleChangeAutoFolderSync}
+            onSyncFolderChanged={(h) => setSyncFolderHandle(h)}
+            onToast={(msg) => showToast(msg)}
+          />
+        )}
 
-      <BackupModal
-        open={backupOpen}
-        project={activeProject}
-        dict={dict}
-        onClose={() => setBackupOpen(false)}
-        onImportedProject={(imported) => {
-          setProjects((list) => [imported, ...list]);
-          handleSelectProject(imported.id);
-          showToast(`Đã nhập dự án "${imported.name}".`);
-        }}
-      />
+        {projectHubOpen && (
+          <ProjectHubOverlay
+            open={projectHubOpen}
+            projects={projects}
+            activeProjectId={activeProject.id}
+            dict={dict}
+            onClose={() => setProjectHubOpen(false)}
+            onSelectProject={handleSelectProject}
+            onCreateFromTemplate={handleCreateFromTemplate}
+            onDuplicateProject={(p) => void handleDuplicateProject(p)}
+            onUpdateProjectMeta={handleUpdateProjectMeta}
+            onDeleteProject={(id) => void handleDeleteProject(id)}
+            onExportMosaFile={(p) => void handleExportMosaFileQuick(p)}
+            onOpenMosaFile={() => void handleOpenMosaFileQuick()}
+          />
+        )}
+      </Suspense>
 
       <TrashModal
         open={trashOpen}
@@ -1909,6 +3232,68 @@ export const App: React.FC = () => {
         dict={dict}
         onClose={() => setShortcutsOpen(false)}
       />
+
+      {/* Native Apple-style Canvas & Card Right-Click Context Menu */}
+      {!presentMode && (
+        <CanvasContextMenu
+          menu={contextMenu}
+          cards={activeProject.cards}
+          selectedIds={selectedIds}
+          canUndo={canUndo}
+          canRedo={canRedo}
+          dict={dict}
+          onClose={() => setContextMenu(null)}
+          onStartStickyMove={(pt) => interactions.startStickyMove(pt)}
+          onEditNote={(id) => setEditingCardId(id)}
+          onOpenFileCard={(c) => void handleOpenFileCard(c)}
+          onReplaceFileCard={(c) => {
+            replaceTargetFileCardRef.current = c;
+            replaceFilePickerRef.current?.click();
+          }}
+          onOpenLightbox={(c) => setLightboxCardId(c.id)}
+          onReplaceImageCard={(c) => {
+            replaceTargetCardRef.current = c;
+            replacePickerRef.current?.click();
+          }}
+          onExtractPalette={(c) => void handleExtractPalette(c)}
+          onToggleCrop={(id) => {
+            setCroppingCardId((prev) => {
+              if (prev === id) return null;
+              const target = activeProject.cards.find((it) => it.id === id);
+              if (target && !target.crop) {
+                handleChangeCard(id, { crop: { x: 0.08, y: 0.08, w: 0.84, h: 0.84 } }, true);
+              }
+              return id;
+            });
+          }}
+          onRunAiCutout={(c) => void handleRunAiCutout(c)}
+          onCopyImageForApps={(c) => void handleCopyImageForApps(c)}
+          onConnectSelected={handleConnectSelected}
+          onClearConnections={handleClearConnections}
+          onPickEyedropperColor={() => void handlePickEyedropperColor()}
+          onCopyHex={(hex) => {
+            navigator.clipboard?.writeText(hex).catch(() => undefined);
+            showToast(`${dict.copiedHex}: ${hex}`);
+          }}
+          onDuplicate={handleDuplicateIds}
+          onStepZ={handleStepZ}
+          onToggleLock={handleToggleLockSelected}
+          onGroup={handleGroupSelected}
+          onUngroup={handleUngroup}
+          onAlign={handleAlign}
+          onMoveToInbox={handleMoveToInbox}
+          onDelete={handleDeleteIdsToTrash}
+          onCreateNoteAt={createNoteAt}
+          onTriggerAddFiles={() => filePickerRef.current?.click()}
+          onOpenAddLink={() => setAddLinkOpen(true)}
+          onCreateColorAt={(pt) => createColorCard(pt)}
+          onOpenArrange={() => setArrangeOpen(true)}
+          onFitBoard={handleFitBoard}
+          onZoomReset={handleZoomReset}
+          onUndo={handleUndo}
+          onRedo={handleRedo}
+        />
+      )}
 
       {/* Ephemeral status toast */}
       {toast && (

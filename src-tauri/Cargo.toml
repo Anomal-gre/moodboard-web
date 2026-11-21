@@ -1,0 +1,18 @@
+[package]
+name = "mosa"
+version = "1.0.0"
+description = "Mosa - Local-First AI Moodboard (Tauri v2 Rust Desktop)"
+authors = ["Mosa Studio"]
+edition = "2021"
+
+[lib]
+name = "mosa_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = [] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"

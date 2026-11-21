@@ -43,7 +43,7 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
       await onSubmit(url.trim(), title.trim(), tryAsImage);
       resetAndClose();
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Lỗi thêm liên kết.');
+      setError(err instanceof Error ? err.message : dict.addLinkError);
     } finally {
       setSubmitting(false);
     }

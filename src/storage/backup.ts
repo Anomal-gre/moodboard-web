@@ -48,7 +48,7 @@ export async function exportProjectBackup(
   }
 
   const payload: BackupFileV1 = {
-    format: 'moodboard-0y03-backup',
+    format: 'mosa-backup',
     version: 1,
     exportedAt: new Date().toISOString(),
     project,

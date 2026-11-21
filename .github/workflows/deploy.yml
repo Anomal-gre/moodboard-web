@@ -1,4 +1,4 @@
-name: Deploy 0Y03 Moodboard to GitHub Pages
+name: Deploy Mosa to GitHub Pages
 
 on:
   push:

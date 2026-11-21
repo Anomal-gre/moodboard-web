@@ -102,7 +102,9 @@ export async function processUploadedImage(blob: Blob): Promise<DecodedImageInfo
 
   const digest = await computeBlobDigest(blob);
   const targetMime =
-    blob.type === 'image/png' || blob.type === 'image/webp' ? 'image/webp' : 'image/jpeg';
+    blob.type === 'image/png' || blob.type === 'image/webp' || blob.type === 'image/svg+xml'
+      ? 'image/png'
+      : 'image/jpeg';
   const { blob: thumbnail, width, height } = await resizeImageBlob(
     blob,
     THUMBNAIL_MAX_EDGE,

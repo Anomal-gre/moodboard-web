@@ -1,32 +1,38 @@
 import React from 'react';
 import {
+  AlignCenterHorizontal,
+  AlignCenterVertical,
+  AlignEndHorizontal,
+  AlignEndVertical,
   AlignHorizontalSpaceAround,
   AlignStartHorizontal,
   AlignStartVertical,
+  AlignVerticalSpaceAround,
   ArrowDownToLine,
   ArrowUpToLine,
   Copy,
   Group,
   Inbox,
   Lock,
+  Move,
   Trash2,
   Ungroup,
   Unlock,
 } from 'lucide-react';
 import type { Card } from '../domain/types';
+import type { AlignMode } from '../domain/geometry';
 import type { I18nDict } from '../i18n';
 
 interface SelectionOverlayProps {
   selectedCards: Card[];
   dict: I18nDict;
+  onStartStickyMove: (e: React.MouseEvent) => void;
   onGroup: () => void;
   onUngroup: () => void;
   onToggleLock: () => void;
   onBringForward: () => void;
   onSendBackward: () => void;
-  onAlignLeft: () => void;
-  onAlignTop: () => void;
-  onDistributeH: () => void;
+  onAlign: (mode: AlignMode) => void;
   onDuplicate: () => void;
   onMoveToInbox: () => void;
   onDelete: () => void;
@@ -35,14 +41,13 @@ interface SelectionOverlayProps {
 export const SelectionOverlay: React.FC<SelectionOverlayProps> = ({
   selectedCards,
   dict,
+  onStartStickyMove,
   onGroup,
   onUngroup,
   onToggleLock,
   onBringForward,
   onSendBackward,
-  onAlignLeft,
-  onAlignTop,
-  onDistributeH,
+  onAlign,
   onDuplicate,
   onMoveToInbox,
   onDelete,
@@ -56,8 +61,25 @@ export const SelectionOverlay: React.FC<SelectionOverlayProps> = ({
   const canDistribute = selectedCards.filter((c) => !c.locked).length >= 3;
 
   return (
-    <div className="multi-action-bar" role="toolbar" aria-label={dict.selectedCount(selectedCards.length)}>
+    <div
+      className="multi-action-bar"
+      role="toolbar"
+      aria-label={dict.selectedCount(selectedCards.length)}
+    >
       <span className="multi-action-count">{dict.selectedCount(selectedCards.length)}</span>
+      <span className="toolbar-sep" />
+
+      <button
+        type="button"
+        className="btn-xs btn-subtle"
+        disabled={allLocked}
+        title={dict.moveSelected}
+        onClick={(e) => onStartStickyMove(e)}
+      >
+        <Move size={13} />
+        <span>{dict.moveSelected}</span>
+      </button>
+
       <span className="toolbar-sep" />
 
       <button
@@ -100,20 +122,76 @@ export const SelectionOverlay: React.FC<SelectionOverlayProps> = ({
 
       <span className="toolbar-sep" />
 
-      <button type="button" className="icon-btn" title={dict.alignLeft} onClick={onAlignLeft}>
+      {/* Horizontal Alignment: Left, Center, Right */}
+      <button
+        type="button"
+        className="icon-btn"
+        title={dict.alignLeft}
+        onClick={() => onAlign('left')}
+      >
         <AlignStartVertical size={16} />
       </button>
-      <button type="button" className="icon-btn" title={dict.alignTop} onClick={onAlignTop}>
+      <button
+        type="button"
+        className="icon-btn"
+        title={dict.alignCenterH}
+        onClick={() => onAlign('center-h')}
+      >
+        <AlignCenterVertical size={16} />
+      </button>
+      <button
+        type="button"
+        className="icon-btn"
+        title={dict.alignRight}
+        onClick={() => onAlign('right')}
+      >
+        <AlignEndVertical size={16} />
+      </button>
+
+      {/* Vertical Alignment: Top, Middle, Bottom */}
+      <button
+        type="button"
+        className="icon-btn"
+        title={dict.alignTop}
+        onClick={() => onAlign('top')}
+      >
         <AlignStartHorizontal size={16} />
       </button>
       <button
         type="button"
         className="icon-btn"
+        title={dict.alignCenterV}
+        onClick={() => onAlign('center-v')}
+      >
+        <AlignCenterHorizontal size={16} />
+      </button>
+      <button
+        type="button"
+        className="icon-btn"
+        title={dict.alignBottom}
+        onClick={() => onAlign('bottom')}
+      >
+        <AlignEndHorizontal size={16} />
+      </button>
+
+      {/* Distribute Spacing: Horizontal & Vertical */}
+      <button
+        type="button"
+        className="icon-btn"
         disabled={!canDistribute}
         title={dict.distributeH}
-        onClick={onDistributeH}
+        onClick={() => onAlign('distribute-h')}
       >
         <AlignHorizontalSpaceAround size={16} />
+      </button>
+      <button
+        type="button"
+        className="icon-btn"
+        disabled={!canDistribute}
+        title={dict.distributeV}
+        onClick={() => onAlign('distribute-v')}
+      >
+        <AlignVerticalSpaceAround size={16} />
       </button>
 
       <span className="toolbar-sep" />
@@ -124,7 +202,12 @@ export const SelectionOverlay: React.FC<SelectionOverlayProps> = ({
       <button type="button" className="icon-btn" title={dict.moveToInbox} onClick={onMoveToInbox}>
         <Inbox size={16} />
       </button>
-      <button type="button" className="icon-btn icon-btn--danger" title={dict.deleteToTrash} onClick={onDelete}>
+      <button
+        type="button"
+        className="icon-btn icon-btn--danger"
+        title={`${dict.deleteToTrash} (Del)`}
+        onClick={onDelete}
+      >
         <Trash2 size={16} />
       </button>
     </div>

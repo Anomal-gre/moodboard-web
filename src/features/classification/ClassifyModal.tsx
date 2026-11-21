@@ -97,8 +97,14 @@ export const ClassifyModal: React.FC<ClassifyModalProps> = ({
   const terminateWorker = useCallback(() => {
     activeRequestIdRef.current = null;
     if (workerRef.current) {
-      workerRef.current.terminate();
+      try {
+        workerRef.current.postMessage({ type: 'dispose' });
+      } catch {
+        // ignore
+      }
+      const w = workerRef.current;
       workerRef.current = null;
+      window.setTimeout(() => w.terminate(), 25);
     }
   }, []);
 
@@ -433,7 +439,8 @@ export const ClassifyModal: React.FC<ClassifyModalProps> = ({
         <div className="classify-review">
           {timingInfo && (
             <div className="ai-timing-banner">
-              {dict.aiColdWarmInfo(timingInfo.ms, timingInfo.cached)}
+              <span>{dict.aiColdWarmInfo(timingInfo.ms, timingInfo.cached)}</span>
+              <span className="meta-pill">{dict.aiRamFreedBadge}</span>
             </div>
           )}
           <p className="field-hint">{dict.aiReviewNote}</p>

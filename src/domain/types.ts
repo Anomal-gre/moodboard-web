@@ -22,6 +22,7 @@ export interface Source {
   pageUrl?: string;
   imageUrl?: string;
   fileName?: string;
+  localPath?: string;
   method: CaptureMethod;
   capturedAt: string;
 }
@@ -32,6 +33,7 @@ export interface Card {
   title: string;
   text: string;
   color?: string;
+  textColor?: string;
   category: Category;
   x: number;
   y: number;
@@ -43,9 +45,32 @@ export interface Card {
   groupId?: string;
   source?: Source;
   assetId?: string;
+  originalAssetId?: string;
+  aiClassifiedAssetId?: string;
   imageStatus?: ImageStatus;
   framed?: boolean;
-  designFile?: { extension: string; size?: number };
+  cutout?: boolean;
+  flipH?: boolean;
+  crop?: {
+    x: number;
+    y: number;
+    w: number;
+    h: number;
+  };
+  linksTo?: string[];
+  spec?: {
+    code?: string;
+    price?: string;
+    qty?: number;
+  };
+  dominantHex?: string;
+  rotation?: number; // Subtle visual tilt in degrees (-15..15), undefined/0 = straight
+  designFile?: {
+    extension: string;
+    size?: number;
+    mime?: string;
+    localPath?: string;
+  };
   createdAt: string;
   updatedAt: string;
 }
@@ -75,6 +100,7 @@ export interface TrashItem {
 export interface ProjectAppearance {
   background: string;
   dots: boolean;
+  grayscale?: boolean;
 }
 
 export interface ProjectView {
@@ -83,10 +109,24 @@ export interface ProjectView {
   zoom: number;
 }
 
+export type ProjectStatus = 'draft' | 'review' | 'approved';
+
+export interface StudioProfile {
+  studioName?: string;
+  studioContact?: string;
+  studioLogoDataUrl?: string;
+  currency?: 'VND' | 'USD';
+}
+
 export interface Project {
   id: string;
   name: string;
   description: string;
+  status?: ProjectStatus;
+  clientName?: string;
+  projectCode?: string;
+  pinned?: boolean;
+  coverDataUrl?: string;
   appearance: ProjectAppearance;
   view: ProjectView;
   cards: Card[];
@@ -99,15 +139,21 @@ export interface WorkspaceMeta {
   language: 'vi' | 'en';
   activeProjectId: string;
   createdAt: string;
+  studioProfile?: StudioProfile;
+  autoFolderSync?: boolean;
 }
 
 export type ArrangeMode = 'bento' | 'freeform' | 'zones' | 'grid';
 
+export type AspectPreset = 'free' | '16:9' | 'a4' | '1:1';
+
 export interface ArrangeOptions {
   mode: ArrangeMode;
   groupByCategory: boolean;
-  overlap: number; // 0..100: controls hierarchy contrast & corner-inset depth
+  overlap: number; // 0..100: controls hierarchy contrast, organic scatter & corner-inset depth
   galleryFrame?: boolean;
+  aspectPreset?: AspectPreset;
+  seed?: number; // Deterministic art-direction variation index
 }
 
 export interface ExportPngOptions {
@@ -155,7 +201,7 @@ export interface BackupAssetEntry {
 }
 
 export interface BackupFileV1 {
-  format: 'moodboard-0y03-backup';
+  format: 'mosa-backup' | 'moodboard-0y03-backup';
   version: 1;
   exportedAt: string;
   project: Project;

@@ -1,23 +1,40 @@
-import React, { useEffect, useState } from 'react';
-import { AlertTriangle, Download, Loader2 } from 'lucide-react';
-import type { ExportPngOptions, Project } from '../../domain/types';
+import React, { useEffect, useMemo, useState } from 'react';
+import {
+  AlertTriangle,
+  Building2,
+  ChevronDown,
+  Download,
+  FileSpreadsheet,
+  Globe,
+  ImagePlus,
+  Loader2,
+  Printer,
+  Trash2,
+} from 'lucide-react';
+import type { ExportPngOptions, Project, StudioProfile } from '../../domain/types';
 import type { I18nDict } from '../../i18n';
 import { DialogShell } from '../common/DialogShell';
 import {
   buildSourcesManifest,
+  exportFfeScheduleCsv,
+  openFfePrintSpecWindow,
   precheckExport,
   renderMoodboardPng,
   slugifyFileName,
   triggerBlobDownload,
   type ExportPrecheck,
 } from './exportPng';
+import { computeFfeBudget, formatCurrency } from './ffeBudget';
+import { exportClientInteractiveHtml } from './exportClientHtml';
 
 interface ExportModalProps {
   open: boolean;
   project: Project;
   selectedIds: string[];
+  studioProfile?: StudioProfile;
   dict: I18nDict;
   onClose: () => void;
+  onChangeStudioProfile: (next: StudioProfile) => void;
   onExported: (message: string) => void;
 }
 
@@ -25,8 +42,10 @@ export const ExportModal: React.FC<ExportModalProps> = ({
   open,
   project,
   selectedIds,
+  studioProfile,
   dict,
   onClose,
+  onChangeStudioProfile,
   onExported,
 }) => {
   const [options, setOptions] = useState<ExportPngOptions>({
@@ -39,6 +58,9 @@ export const ExportModal: React.FC<ExportModalProps> = ({
   const [exporting, setExporting] = useState(false);
   const [error, setError] = useState('');
   const [missingPrompt, setMissingPrompt] = useState(false);
+  const [brandOpen, setBrandOpen] = useState(false);
+
+  const profile: StudioProfile = studioProfile ?? {};
 
   useEffect(() => {
     if (!open) {
@@ -54,6 +76,28 @@ export const ExportModal: React.FC<ExportModalProps> = ({
       alive = false;
     };
   }, [open, options, project, selectedIds]);
+
+  const budgetSummary = useMemo(() => {
+    if (!precheck) return null;
+    return computeFfeBudget(precheck.cards, profile);
+  }, [precheck, profile]);
+
+  const handleLogoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+    if (file.size > 2 * 1024 * 1024) {
+      setError('Logo tối đa 2 MB.');
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = () => {
+      if (typeof reader.result === 'string') {
+        onChangeStudioProfile({ ...profile, studioLogoDataUrl: reader.result });
+      }
+    };
+    reader.readAsDataURL(file);
+  };
 
   const executeExport = async (allowPlaceholders: boolean) => {
     if (!precheck || precheck.cards.length === 0 || precheck.tooLarge) return;
@@ -79,7 +123,22 @@ export const ExportModal: React.FC<ExportModalProps> = ({
       onExported(dict.exportSuccess);
       onClose();
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Lỗi khi xuất PNG.');
+      setError(err instanceof Error ? err.message : dict.exportError);
+    } finally {
+      setExporting(false);
+    }
+  };
+
+  const handleExportClientHtml = async () => {
+    if (!precheck || precheck.cards.length === 0) return;
+    setExporting(true);
+    setError('');
+    try {
+      await exportClientInteractiveHtml(project, precheck.cards, dict, profile);
+      onExported(dict.exportClientHtmlSuccess);
+      onClose();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : dict.exportError);
     } finally {
       setExporting(false);
     }
@@ -92,7 +151,7 @@ export const ExportModal: React.FC<ExportModalProps> = ({
     <DialogShell
       open={open}
       title={dict.exportTitle}
-      width={460}
+      width={484}
       closeLabel={dict.close}
       onClose={onClose}
       footer={
@@ -177,7 +236,7 @@ export const ExportModal: React.FC<ExportModalProps> = ({
               className={`seg-btn ${options.scale === 2 ? 'is-active' : ''}`}
               onClick={() => setOptions((o) => ({ ...o, scale: 2 }))}
             >
-              2× (Sắc nét)
+              {dict.exportScale2x}
             </button>
           </div>
         </div>
@@ -200,13 +259,150 @@ export const ExportModal: React.FC<ExportModalProps> = ({
           />
         </label>
 
-        {precheck && !isEmpty && (
-          <div className="export-meta-bar">
-            <span>{precheck.cards.length} card</span>
-            <span className="mono">
-              {precheck.widthPx.toLocaleString()} × {precheck.heightPx.toLocaleString()} px
+        {/* Collapsible White-Label Studio Branding */}
+        <div className="inspector-disclosure">
+          <button
+            type="button"
+            className="inspector-disclosure-btn"
+            aria-expanded={brandOpen}
+            onClick={() => setBrandOpen((v) => !v)}
+          >
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+              <Building2 size={14} />
+              <span>{dict.studioBrandSection}</span>
             </span>
-          </div>
+            <ChevronDown
+              size={14}
+              className={`disclosure-chevron ${brandOpen ? 'is-open' : ''}`}
+            />
+          </button>
+
+          {brandOpen && (
+            <div className="inspector-disclosure-body">
+              <div className="studio-logo-row">
+                {profile.studioLogoDataUrl ? (
+                  <>
+                    <img src={profile.studioLogoDataUrl} alt="" className="studio-logo-preview" />
+                    <button
+                      type="button"
+                      className="btn-xs btn-subtle"
+                      onClick={() =>
+                        onChangeStudioProfile({ ...profile, studioLogoDataUrl: undefined })
+                      }
+                    >
+                      <Trash2 size={12} />
+                      <span>{dict.studioLogoRemove}</span>
+                    </button>
+                  </>
+                ) : (
+                  <label className="btn-xs btn-subtle file-label-btn">
+                    <ImagePlus size={13} />
+                    <span>{dict.studioLogoUpload}</span>
+                    <input
+                      type="file"
+                      accept="image/png,image/svg+xml,image/jpeg,image/webp"
+                      hidden
+                      onChange={handleLogoUpload}
+                    />
+                  </label>
+                )}
+              </div>
+
+              <div className="ffe-price-qty-row">
+                <label className="field flex-1">
+                  <span className="field-label">{dict.studioNameLabel}</span>
+                  <input
+                    className="input-sm"
+                    placeholder={dict.studioNamePlaceholder}
+                    value={profile.studioName ?? ''}
+                    onChange={(e) =>
+                      onChangeStudioProfile({ ...profile, studioName: e.target.value })
+                    }
+                  />
+                </label>
+                <label className="field" style={{ width: 88, flexShrink: 0 }}>
+                  <span className="field-label">{dict.studioCurrencyLabel}</span>
+                  <select
+                    className="input-sm"
+                    value={profile.currency ?? 'VND'}
+                    onChange={(e) =>
+                      onChangeStudioProfile({
+                        ...profile,
+                        currency: e.target.value as 'VND' | 'USD',
+                      })
+                    }
+                  >
+                    <option value="VND">VND (₫)</option>
+                    <option value="USD">USD ($)</option>
+                  </select>
+                </label>
+              </div>
+
+              <label className="field">
+                <span className="field-label">{dict.studioContactLabel}</span>
+                <input
+                  className="input-sm"
+                  placeholder={dict.studioContactPlaceholder}
+                  value={profile.studioContact ?? ''}
+                  onChange={(e) =>
+                    onChangeStudioProfile({ ...profile, studioContact: e.target.value })
+                  }
+                />
+              </label>
+            </div>
+          )}
+        </div>
+
+        {precheck && !isEmpty && (
+          <>
+            <div className="export-meta-bar">
+              <span>{dict.exportCardCount(precheck.cards.length)}</span>
+              {budgetSummary && budgetSummary.pricedCount > 0 ? (
+                <span className="mono" style={{ fontWeight: 700, color: 'var(--accent)' }}>
+                  {formatCurrency(budgetSummary.grandTotal, budgetSummary.currency)}
+                </span>
+              ) : (
+                <span className="mono">
+                  {precheck.widthPx.toLocaleString()} × {precheck.heightPx.toLocaleString()} px
+                </span>
+              )}
+            </div>
+
+            <div className="inspector-btn-row">
+              <button
+                type="button"
+                className="btn-xs btn-subtle flex-1"
+                disabled={exporting}
+                onClick={() => {
+                  exportFfeScheduleCsv(project, precheck.cards, dict, profile);
+                  onExported(dict.exportFfeSuccess);
+                }}
+              >
+                <FileSpreadsheet size={13} />
+                <span>{dict.exportFfeCsv}</span>
+              </button>
+              <button
+                type="button"
+                className="btn-xs btn-subtle flex-1"
+                disabled={exporting}
+                onClick={() => void openFfePrintSpecWindow(project, precheck.cards, dict, profile)}
+              >
+                <Printer size={13} />
+                <span>{dict.exportFfePrint}</span>
+              </button>
+            </div>
+
+            <button
+              type="button"
+              className="btn btn-subtle full-width"
+              disabled={exporting}
+              title={dict.exportClientHtmlHint}
+              onClick={() => void handleExportClientHtml()}
+            >
+              <Globe size={15} />
+              <span>{dict.exportClientHtmlBtn}</span>
+            </button>
+          </>
         )}
 
         {isEmpty && <div className="alert-box">{dict.exportEmptyReason}</div>}

@@ -1,6 +1,6 @@
 import type { AssetBytesRecord, AssetMeta, Project, WorkspaceMeta } from '../domain/types';
 import { createSampleProject, SAMPLE_ASSETS } from '../domain/project';
-import { createId } from '../domain/validate';
+import { createId, normalizeDashes, sanitizeCard } from '../domain/validate';
 import {
   idbDelete,
   idbGet,
@@ -28,13 +28,22 @@ export interface InitializedWorkspace {
   activeProject: Project;
 }
 
+function cleanProjectDashes(p: Project): Project {
+  return {
+    ...p,
+    name: normalizeDashes(p.name),
+    description: normalizeDashes(p.description),
+    cards: (p.cards || []).map((c) => sanitizeCard(c)),
+    trash: (p.trash || []).map((t) => ({ ...t, card: sanitizeCard(t.card) })),
+  };
+}
+
 export async function initWorkspace(): Promise<InitializedWorkspace> {
   const existingMeta = await idbGet<WorkspaceMeta>(STORES.META, WORKSPACE_META_KEY);
   const existingProjects = await idbGetAll<Project>(STORES.PROJECTS);
 
   if (!existingMeta && existingProjects.length === 0) {
-    // Seed sample board once on a genuinely empty DB
-    const sampleProject = createSampleProject();
+    const sampleProject = cleanProjectDashes(createSampleProject());
     const meta: WorkspaceMeta = {
       schemaVersion: 1,
       language: 'vi',
@@ -62,7 +71,7 @@ export async function initWorkspace(): Promise<InitializedWorkspace> {
     return { meta, projects: [sampleProject], activeProject: sampleProject };
   }
 
-  let projects = existingProjects;
+  let projects = existingProjects.map(cleanProjectDashes);
   let meta: WorkspaceMeta = existingMeta ?? {
     schemaVersion: 1,
     language: 'vi',
@@ -71,14 +80,13 @@ export async function initWorkspace(): Promise<InitializedWorkspace> {
   };
 
   if (projects.length === 0) {
-    const sampleProject = createSampleProject();
+    const sampleProject = cleanProjectDashes(createSampleProject());
     projects = [sampleProject];
     meta = { ...meta, activeProjectId: sampleProject.id };
     await idbPut(STORES.PROJECTS, sampleProject);
     await idbPut(STORES.META, meta, WORKSPACE_META_KEY);
   }
 
-  // Sort most recently updated first
   projects.sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
   let active = projects.find((p) => p.id === meta.activeProjectId);
   if (!active) {
@@ -95,27 +103,69 @@ export async function saveWorkspaceMeta(meta: WorkspaceMeta): Promise<void> {
 }
 
 export async function loadProject(projectId: string): Promise<Project | undefined> {
-  return idbGet<Project>(STORES.PROJECTS, projectId);
+  const p = await idbGet<Project>(STORES.PROJECTS, projectId);
+  return p ? cleanProjectDashes(p) : undefined;
 }
 
 export async function listProjects(): Promise<Project[]> {
   const list = await idbGetAll<Project>(STORES.PROJECTS);
-  return list.sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
+  return list.map(cleanProjectDashes).sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
 }
 
 export function saveProject(project: Project): Promise<void> {
-  const prev = projectSaveQueues.get(project.id) ?? Promise.resolve();
+  const cleaned = cleanProjectDashes(project);
+  const prev = projectSaveQueues.get(cleaned.id) ?? Promise.resolve();
   const next = prev
     .catch(() => undefined)
     .then(async () => {
-      await idbPut(STORES.PROJECTS, project);
+      await idbPut(STORES.PROJECTS, cleaned);
     });
-  projectSaveQueues.set(project.id, next);
+  projectSaveQueues.set(cleaned.id, next);
   return next;
 }
 
 export async function deleteProjectById(projectId: string): Promise<void> {
   await idbDelete(STORES.PROJECTS, projectId);
+}
+
+export async function duplicateProject(
+  source: Project,
+  copySuffix = '(Copy)'
+): Promise<Project> {
+  const now = new Date().toISOString();
+  const idMap = new Map<string, string>();
+  for (const c of source.cards) {
+    idMap.set(c.id, createId('crd'));
+  }
+  const clonedCards = source.cards.map((c) => ({
+    ...c,
+    id: idMap.get(c.id)!,
+    groupId: c.groupId ? idMap.get(c.groupId) : undefined,
+    linksTo: c.linksTo
+      ?.map((tid) => idMap.get(tid))
+      .filter((x): x is string => Boolean(x)),
+    spec: c.spec ? { ...c.spec } : undefined,
+    crop: c.crop ? { ...c.crop } : undefined,
+    source: c.source ? { ...c.source } : undefined,
+    designFile: c.designFile ? { ...c.designFile } : undefined,
+    createdAt: now,
+    updatedAt: now,
+  }));
+
+  const cloned: Project = {
+    ...source,
+    id: createId('proj'),
+    name: `${source.name} ${copySuffix}`.trim(),
+    status: 'draft',
+    pinned: false,
+    appearance: { ...source.appearance },
+    view: { ...source.view },
+    cards: clonedCards,
+    trash: [],
+    updatedAt: now,
+  };
+  await saveProject(cloned);
+  return cloned;
 }
 
 export async function putImageAsset(
@@ -124,11 +174,9 @@ export async function putImageAsset(
 ): Promise<AssetMeta> {
   const decoded = await processUploadedImage(blob);
 
-  // Deduplicate by SHA-256 digest
   const allMeta = await idbGetAll<AssetMeta>(STORES.ASSET_META);
   const existing = allMeta.find((m) => m.digest && m.digest === decoded.digest);
   if (existing) {
-    // Verify bytes still exist
     const bytes = await idbGet<AssetBytesRecord>(STORES.ASSET_BYTES, existing.id);
     if (bytes) {
       return existing;
@@ -149,6 +197,36 @@ export async function putImageAsset(
     id,
     blob,
     thumbnail: decoded.thumbnail,
+  };
+
+  await idbRunTransaction([STORES.ASSET_META, STORES.ASSET_BYTES], 'readwrite', (tx) => {
+    tx.objectStore(STORES.ASSET_META).put(meta);
+    tx.objectStore(STORES.ASSET_BYTES).put(bytesRec);
+  });
+
+  return meta;
+}
+
+/**
+ * Store arbitrary non-image file bytes in IndexedDB so double-click can open the file anytime.
+ */
+export async function putRawFileAsset(
+  blob: Blob,
+  fileName: string
+): Promise<AssetMeta> {
+  const id = createId('fil');
+  const meta: AssetMeta = {
+    id,
+    fileName,
+    mime: blob.type || 'application/octet-stream',
+    size: blob.size,
+    width: 0,
+    height: 0,
+  };
+  const bytesRec: AssetBytesRecord = {
+    id,
+    blob,
+    thumbnail: blob,
   };
 
   await idbRunTransaction([STORES.ASSET_META, STORES.ASSET_BYTES], 'readwrite', (tx) => {

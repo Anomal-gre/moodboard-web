@@ -1,92 +1,157 @@
+/* Offline fonts are loaded via relative ./fonts/fonts.css in index.html for GitHub Pages & local subpath compatibility */
+
 :root {
-  /* Studio paper, forest ink and oak */
-  --paper-bg: #f1f0eb;
-  --surface: #faf8f2;
-  --surface-elevated: #fffefa;
-  --surface-subtle: #f0eee7;
-  --ink: #243129;
-  --ink-muted: #5b685f;
-  --ink-faint: #667168;
-  --border: #e0ded4;
-  --border-strong: #c9c7ba;
-  --accent: #2e523f;
-  --accent-hover: #213e30;
-  --accent-soft: rgba(46, 82, 63, 0.11);
-  --accent-ring: rgba(46, 82, 63, 0.34);
-  --on-accent: #fffefa;
-  --oak: #e8d6bd;
-  --danger: #b5453b;
-  --danger-soft: rgba(181, 69, 59, 0.1);
-  --warn: #a66c1f;
-  --warn-soft: rgba(166, 108, 31, 0.12);
+  /* Apple / macOS Frosted Glass Light Palette */
+  --paper-bg: #f2f2f7;
+  --surface: rgba(255, 255, 255, 0.58);
+  --surface-solid: #ffffff;
+  --surface-elevated: rgba(255, 255, 255, 0.66);
+  --surface-subtle: rgba(118, 118, 128, 0.09);
+  --surface-hover: rgba(118, 118, 128, 0.15);
+  --glass-surface: linear-gradient(
+    180deg,
+    rgba(255, 255, 255, 0.74) 0%,
+    rgba(255, 255, 255, 0.48) 100%
+  );
+  --glass-elevated: linear-gradient(
+    180deg,
+    rgba(255, 255, 255, 0.8) 0%,
+    rgba(255, 255, 255, 0.54) 100%
+  );
+  --glass-popover: linear-gradient(
+    180deg,
+    rgba(255, 255, 255, 0.88) 0%,
+    rgba(255, 255, 255, 0.78) 100%
+  );
+  --glass-border: rgba(15, 23, 42, 0.1);
+  --glass-rim: inset 0 1px 0.5px rgba(255, 255, 255, 0.95),
+    inset 0 -1px 0 rgba(15, 23, 42, 0.04);
+  --glass-blur: blur(22px) saturate(210%) brightness(1.03);
+  --glass-blur-heavy: blur(28px) saturate(190%);
+
+  --ink: #1c1c1e;
+  --ink-muted: #636366;
+  --ink-faint: #8e8e93;
+  --border: rgba(60, 60, 67, 0.11);
+  --border-strong: rgba(60, 60, 67, 0.2);
+
+  /* iOS Accent & Semantic Colors */
+  --accent: #007aff;
+  --accent-hover: #0062cc;
+  --accent-soft: rgba(0, 122, 255, 0.12);
+  --accent-ring: rgba(0, 122, 255, 0.32);
+  --on-accent: #ffffff;
+  --oak: #e5e5ea;
+  --success: #34c759;
+  --danger: #ff3b30;
+  --danger-soft: rgba(255, 59, 48, 0.12);
+  --warn: #ff9500;
+  --warn-soft: rgba(255, 149, 0, 0.14);
 
   /* Dark theme reference */
-  --dark-paper-bg: #191d1a;
+  --dark-paper-bg: #121214;
 
-  /* Spacing & radii */
+  /* Spacing & iOS Continuous Squircle Radii */
   --sp-1: 4px;
   --sp-2: 8px;
   --sp-3: 12px;
   --sp-4: 16px;
   --sp-6: 24px;
-  --radius-sm: 8px;
-  --radius-md: 10px;
-  --radius-lg: 14px;
+  --radius-sm: 10px;
+  --radius-md: 16px;
+  --radius-lg: 20px;
+  --radius-xl: 24px;
   --radius-pill: 999px;
 
-  --workspace-gutter: 20px;
-  --workspace-header-height: 68px;
-  --workspace-footer-clearance: 76px;
+  --workspace-gutter: 18px;
+  --workspace-header-height: 64px;
+  --workspace-footer-clearance: 82px;
 
-  /* Shadows */
-  --shadow-sm: 0 2px 8px rgba(28, 36, 29, 0.06), 0 1px 2px rgba(28, 36, 29, 0.04);
-  --shadow-md: 0 8px 24px rgba(28, 36, 29, 0.09), 0 2px 6px rgba(28, 36, 29, 0.05);
-  --shadow-lg: 0 18px 46px rgba(22, 30, 24, 0.16), 0 4px 12px rgba(22, 30, 24, 0.08);
-  --shadow-card: 0 4px 16px rgba(28, 36, 29, 0.08), 0 1px 3px rgba(28, 36, 29, 0.05);
-  --shadow-card-hover: 0 10px 28px rgba(28, 36, 29, 0.14), 0 2px 6px rgba(28, 36, 29, 0.06);
+  /* Soft Layered Apple Shadows */
+  --shadow-sm: 0 2px 10px rgba(0, 0, 0, 0.05), 0 1px 2px rgba(0, 0, 0, 0.03);
+  --shadow-md: 0 10px 30px rgba(0, 0, 0, 0.08), 0 2px 8px rgba(0, 0, 0, 0.04);
+  --shadow-lg: 0 22px 54px rgba(0, 0, 0, 0.14), 0 4px 14px rgba(0, 0, 0, 0.06);
+  --shadow-card: 0 4px 18px rgba(0, 0, 0, 0.06), 0 1px 3px rgba(0, 0, 0, 0.04);
+  --shadow-card-hover: 0 12px 32px rgba(0, 0, 0, 0.11), 0 3px 8px rgba(0, 0, 0, 0.05);
+  --shadow-card-lifted: 0 26px 58px rgba(0, 0, 0, 0.18), 0 8px 20px rgba(0, 0, 0, 0.08);
 
-  /* Typography */
-  --font-sans: 'Segoe UI', -apple-system, BlinkMacSystemFont, 'Inter', Arial, sans-serif;
-  --font-display: Georgia, 'Times New Roman', serif;
-  --font-mono: 'Cascadia Code', Consolas, ui-monospace, monospace;
+  /* Unified Vietnamese-Safe Apple/iOS Typography (No broken Georgia serif glyphs) */
+  --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'SF Pro Text',
+    'Segoe UI', Roboto, sans-serif;
+  --font-display: 'Inter', -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Segoe UI',
+    Roboto, sans-serif;
+  --font-brand: 'Bricolage Grotesque', 'Inter', -apple-system, BlinkMacSystemFont, 'SF Pro Display',
+    sans-serif;
+  --font-mono: 'SF Mono', 'Cascadia Code', Consolas, ui-monospace, monospace;
 
-  /* Timing */
+  /* iOS Spring Timing Curves */
   --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
-  --dur-fast: 140ms;
-  --dur-med: 220ms;
+  --ease-spring: cubic-bezier(0.175, 0.885, 0.32, 1.15);
+  --ease-ios: cubic-bezier(0.32, 0.72, 0, 1);
+  --dur-fast: 160ms;
+  --dur-med: 260ms;
+  --dur-spring: 380ms;
 }
 
 .theme-dark {
   color-scheme: dark;
-  --surface: #242b25;
-  --surface-elevated: #2b342d;
-  --surface-subtle: #1f2620;
-  --ink: #eef0ea;
-  --ink-muted: #adb5ae;
-  --ink-faint: #a0aba1;
-  --border: #343b35;
-  --border-strong: #48524a;
-  --accent: #a9ceb4;
-  --accent-hover: #bfdfc9;
-  --accent-soft: rgba(169, 206, 180, 0.15);
-  --accent-ring: rgba(169, 206, 180, 0.42);
-  --on-accent: #182c22;
-  --oak: #6d5643;
-  --danger: #e2746a;
-  --danger-soft: rgba(226, 116, 106, 0.16);
-  --warn: #e0a650;
-  --warn-soft: rgba(224, 166, 80, 0.16);
-  --shadow-sm: 0 2px 10px rgba(0, 0, 0, 0.28);
-  --shadow-md: 0 10px 28px rgba(0, 0, 0, 0.38);
-  --shadow-lg: 0 20px 52px rgba(0, 0, 0, 0.55);
-  --shadow-card: 0 6px 20px rgba(0, 0, 0, 0.34);
-  --shadow-card-hover: 0 12px 32px rgba(0, 0, 0, 0.48);
+  --surface: rgba(30, 30, 34, 0.76);
+  --surface-solid: #1c1c1e;
+  --surface-elevated: rgba(44, 44, 48, 0.84);
+  --surface-subtle: rgba(255, 255, 255, 0.08);
+  --surface-hover: rgba(255, 255, 255, 0.14);
+  --glass-surface: linear-gradient(
+    180deg,
+    rgba(38, 38, 43, 0.78) 0%,
+    rgba(26, 26, 30, 0.72) 100%
+  );
+  --glass-elevated: linear-gradient(
+    180deg,
+    rgba(48, 48, 54, 0.86) 0%,
+    rgba(36, 36, 40, 0.8) 100%
+  );
+  --glass-popover: linear-gradient(
+    180deg,
+    rgba(46, 46, 52, 0.9) 0%,
+    rgba(34, 34, 39, 0.86) 100%
+  );
+  --glass-border: rgba(255, 255, 255, 0.14);
+  --glass-rim: inset 0 1px 0.5px rgba(255, 255, 255, 0.16),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.28);
+  --glass-blur: blur(24px) saturate(190%);
+  --glass-blur-heavy: blur(28px) saturate(190%);
+
+  --ink: #f5f5f7;
+  --ink-muted: #a1a1a6;
+  --ink-faint: #6e6e73;
+  --border: rgba(255, 255, 255, 0.1);
+  --border-strong: rgba(255, 255, 255, 0.2);
+
+  --accent: #0a84ff;
+  --accent-hover: #409cff;
+  --accent-soft: rgba(10, 132, 255, 0.18);
+  --accent-ring: rgba(10, 132, 255, 0.42);
+  --on-accent: #ffffff;
+  --oak: #2c2c2e;
+  --success: #30d158;
+  --danger: #ff453a;
+  --danger-soft: rgba(255, 69, 58, 0.18);
+  --warn: #ff9f0a;
+  --warn-soft: rgba(255, 159, 10, 0.18);
+
+  --shadow-sm: 0 2px 10px rgba(0, 0, 0, 0.32);
+  --shadow-md: 0 12px 32px rgba(0, 0, 0, 0.46);
+  --shadow-lg: 0 24px 60px rgba(0, 0, 0, 0.62);
+  --shadow-card: 0 6px 22px rgba(0, 0, 0, 0.36);
+  --shadow-card-hover: 0 14px 36px rgba(0, 0, 0, 0.52);
+  --shadow-card-lifted: 0 28px 64px rgba(0, 0, 0, 0.68);
 }
 
 @media (prefers-reduced-motion: reduce) {
   :root {
     --dur-fast: 0ms;
     --dur-med: 0ms;
+    --dur-spring: 0ms;
   }
   *,
   *::before,

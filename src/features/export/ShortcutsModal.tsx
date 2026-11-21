@@ -1,6 +1,6 @@
-import React from 'react';
+import React, { useEffect, useRef } from 'react';
+import { X } from 'lucide-react';
 import type { I18nDict } from '../../i18n';
-import { DialogShell } from '../common/DialogShell';
 
 interface ShortcutsModalProps {
   open: boolean;
@@ -8,41 +8,57 @@ interface ShortcutsModalProps {
   onClose: () => void;
 }
 
-const SHORTCUTS = [
-  { keys: 'Space + Kéo / Chuột giữa', desc: 'Di chuyển bảng (Pan)' },
-  { keys: 'Ctrl / Cmd + Cuộn', desc: 'Phóng to / thu nhỏ tại con trỏ' },
-  { keys: 'Nhấp đúp vùng trống', desc: 'Tạo ghi chú mới tại con trỏ' },
-  { keys: 'Shift + Click / Kéo vùng trống', desc: 'Chọn nhiều card / Lasso' },
-  { keys: 'Mũi tên / Shift + Mũi tên', desc: 'Dịch chuyển 1 px / 10 px' },
-  { keys: 'Ctrl / Cmd + D', desc: 'Nhân bản card đang chọn' },
-  { keys: 'Ctrl / Cmd + C / V', desc: 'Sao chép / dán card, ảnh hoặc URL' },
-  { keys: 'Ctrl / Cmd + Z / Shift + Z', desc: 'Hoàn tác / Làm lại (tối đa 40 bước)' },
-  { keys: 'Delete / Backspace', desc: 'Chuyển card vào thùng rác' },
-  { keys: 'Esc', desc: 'Đóng hộp thoại, thoát Trình bày hoặc bỏ chọn' },
-];
-
 export const ShortcutsModal: React.FC<ShortcutsModalProps> = ({ open, dict, onClose }) => {
-  return (
-    <DialogShell
-      open={open}
-      title={dict.shortcuts}
-      width={460}
-      closeLabel={dict.close}
-      onClose={onClose}
-      footer={
-        <button type="button" className="btn btn-subtle" onClick={onClose}>
-          {dict.close}
-        </button>
+  const panelRef = useRef<HTMLElement | null>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const onDown = (e: MouseEvent) => {
+      const target = e.target as HTMLElement | null;
+      if (!target) return;
+      if (panelRef.current?.contains(target)) return;
+      if (target.closest('.shortcuts-corner-btn')) return;
+      onClose();
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        onClose();
       }
+    };
+    window.addEventListener('mousedown', onDown);
+    window.addEventListener('keydown', onKey);
+    return () => {
+      window.removeEventListener('mousedown', onDown);
+      window.removeEventListener('keydown', onKey);
+    };
+  }, [open, onClose]);
+
+  if (!open) return null;
+
+  return (
+    <aside
+      ref={panelRef}
+      className="floating-panel shortcuts-popover"
+      role="dialog"
+      aria-label={dict.shortcuts}
     >
-      <div className="shortcuts-list">
-        {SHORTCUTS.map((row) => (
-          <div key={row.keys} className="shortcut-row">
-            <kbd className="kbd-pill">{row.keys}</kbd>
-            <span>{row.desc}</span>
-          </div>
-        ))}
+      <div className="panel-header">
+        <span className="panel-title">{dict.shortcuts}</span>
+        <button type="button" className="icon-btn-sm" title={dict.close} onClick={onClose}>
+          <X size={15} />
+        </button>
       </div>
-    </DialogShell>
+      <div className="panel-body">
+        <div className="shortcuts-list">
+          {dict.shortcutRows.map((row) => (
+            <div key={row.keys} className="shortcut-row">
+              <kbd className="kbd-pill">{row.keys}</kbd>
+              <span>{row.desc}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+    </aside>
   );
 };
