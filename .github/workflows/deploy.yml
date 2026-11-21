@@ -1,4 +1,4 @@
-name: Deploy Mosa to GitHub Pages
+name: Build and deploy Mosa
 
 on:
   push:
@@ -31,6 +31,14 @@ jobs:
         run: npm test
       - name: Build production bundle
         run: npm run build
+      - name: Upload Cloudflare Pages bundle
+        if: github.ref == 'refs/heads/main'
+        uses: actions/upload-artifact@v4
+        with:
+          name: mosa-cloudflare-dist
+          path: ./dist
+          if-no-files-found: error
+          retention-days: 3
       - name: Upload Pages artifact
         if: github.event_name != 'pull_request'
         uses: actions/upload-pages-artifact@v3
@@ -51,6 +59,32 @@ jobs:
       - name: Deploy to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v4
+
+  deploy-cloudflare:
+    name: Deploy to Cloudflare Pages
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    needs: build
+    environment:
+      name: cloudflare-pages
+      url: https://mosa.ohwow.win/
+    steps:
+      - name: Download tested production bundle
+        uses: actions/download-artifact@v4
+        with:
+          name: mosa-cloudflare-dist
+          path: dist
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Deploy production with Wrangler
+        uses: cloudflare/wrangler-action@953926a2e2182532811c01a25e53647d93bf07c0 # v4.1.3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          command: pages deploy dist --project-name=mosa --branch=main --commit-hash=${{ github.sha }}
 
   desktop-check:
     if: github.event_name == 'pull_request'
