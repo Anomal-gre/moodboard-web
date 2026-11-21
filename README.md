@@ -54,19 +54,31 @@ npm run preview   # Xem thử bản build production tại http://127.0.0.1:4313
 
 ---
 
-## 4. Cấu trúc mã nguồn
+## 4. Tiện ích trình duyệt Mosa Web Clipper (`mosa-clipper/`)
+
+Repo đã tích hợp sẵn tiện ích Chrome / Edge / Vivaldi (Manifest V3) tại thư mục `mosa-clipper/` và gói tải nhanh `public/downloads/mosa-clipper.zip` (có nút tải trực tiếp trong khay **Chưa sắp xếp (Inbox)** trên bản web).
+
+* **Cách cài đặt:** Mở `chrome://extensions` (hoặc `edge://extensions` / `vivaldi://extensions`) → Bật **Developer mode** → Chọn **Load unpacked** → Chọn thư mục `mosa-clipper/`.
+* **Hoạt động ở cả bản deploy online (GitHub Pages / Vercel) lẫn bản chạy local (`http://127.0.0.1:4313`):** tự nhận tab Mosa đang mở, bỏ qua lỗi CORS, tự nâng cấp ảnh Pinterest lên độ phân giải `/originals/` và giữ hàng chờ offline khi Mosa chưa mở.
+
+---
+
+## 5. Cấu trúc mã nguồn
 
 ```text
 moodboard-web/
+  mosa-clipper/         # Chrome / Edge / Vivaldi MV3 Web Clipper Extension
   public/
     brand/logo.svg
+    downloads/          # mosa-clipper.zip (tự động deploy kèm GitHub Pages)
+    fonts/              # Bricolage Grotesque & Inter offline (.woff2)
     samples/            # 5 ảnh mẫu nội thất lưu cùng bản build
   src/
-    domain/             # types, project, history, geometry, arrange, validate, paletteExtract
+    domain/             # types, project, templates, history, geometry, arrange, validate, paletteExtract
     board/              # BoardViewport, CardView, SelectionOverlay, useBoardInteractions
-    features/           # projects, inspector, inbox, appearance, capture, classification, export
-    storage/            # indexedDb, workspaceRepository, assets, backup
-    workers/            # classify.worker.ts (CLIP WASM)
+    features/           # projects, inspector, inbox, clipper, appearance, capture, classification, export
+    storage/            # indexedDb, workspaceRepository, localFolderSync, storageHealth, assets, backup
+    workers/            # classify.worker.ts (CLIP WASM), cutout.worker.ts
     i18n/               # vi.ts, en.ts
     styles/             # tokens.css, app.css
 ```

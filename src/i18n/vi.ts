@@ -438,11 +438,12 @@ export const vi = {
 
   // Ecosystem Phase 4 (#1): Web Clipper Extension Bridge
   clipperBadgeConnected: 'Web Clipper sẵn sàng',
-  clipperBadgeTitle: 'Tiện ích Chrome/Edge Web Clipper',
+  clipperBadgeTitle: 'Tiện ích Mosa Web Clipper',
+  clipperDownloadBtn: 'Tải Mosa Clipper (.zip)',
   clipperReceivedToast: (title: string) => `Đã nhận từ Web Clipper: "${title}" → Chưa sắp xếp`,
-  clipperGuideTitle: 'Cài Mosa Web Clipper (Chrome / Edge)',
+  clipperGuideTitle: 'Cài Mosa Web Clipper (Chrome / Edge / Vivaldi)',
   clipperGuideSteps:
-    'Mở edge://extensions hoặc chrome://extensions → Bật Developer mode → Load unpacked chọn thư mục mosa-clipper để lưu ảnh gốc 1-click từ Pinterest / Behance (không lỗi CORS).',
+    'Tải tệp .zip và giải nén → Mở chrome://extensions → Bật Developer mode → Load unpacked chọn thư mục mosa-clipper để lưu ảnh gốc 1-click từ Pinterest / Behance (không lỗi CORS).',
   aiFirstRunHint: 'Tải mô hình CLIP 1 lần duy nhất (~80 MB) — các lần sau chạy 100% offline trên máy.',
 };
 

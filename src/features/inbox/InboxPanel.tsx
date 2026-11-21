@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import {
   ArrowUpLeft,
   ChevronDown,
+  Download,
   FileCode2,
   Inbox,
   Link2,
@@ -174,30 +175,38 @@ export const InboxPanel: React.FC<InboxPanelProps> = ({
             </div>
           )}
 
-          {clipperBridgeReady && (
-            <div className="inbox-clipper-footer">
-              <button
-                type="button"
-                className="inbox-clipper-toggle"
-                aria-expanded={clipperGuideOpen}
-                onClick={() => setClipperGuideOpen((v) => !v)}
-              >
-                <span className="clipper-status-dot" />
-                <Puzzle size={13} />
-                <span className="truncate">{dict.clipperBadgeConnected}</span>
-                <ChevronDown
-                  size={13}
-                  className={`disclosure-chevron ${clipperGuideOpen ? 'is-open' : ''}`}
-                />
-              </button>
-              {clipperGuideOpen && (
-                <div className="inbox-clipper-guide">
-                  <strong>{dict.clipperGuideTitle}</strong>
-                  <p>{dict.clipperGuideSteps}</p>
-                </div>
-              )}
-            </div>
-          )}
+          <div className="inbox-clipper-footer">
+            <button
+              type="button"
+              className="inbox-clipper-toggle"
+              aria-expanded={clipperGuideOpen}
+              onClick={() => setClipperGuideOpen((v) => !v)}
+            >
+              <span className={`clipper-status-dot ${clipperBridgeReady ? 'is-ok' : ''}`} />
+              <Puzzle size={13} />
+              <span className="truncate">
+                {clipperBridgeReady ? dict.clipperBadgeConnected : dict.clipperBadgeTitle}
+              </span>
+              <ChevronDown
+                size={13}
+                className={`disclosure-chevron ${clipperGuideOpen ? 'is-open' : ''}`}
+              />
+            </button>
+            {clipperGuideOpen && (
+              <div className="inbox-clipper-guide">
+                <strong>{dict.clipperGuideTitle}</strong>
+                <p>{dict.clipperGuideSteps}</p>
+                <a
+                  href="./downloads/mosa-clipper.zip"
+                  download="mosa-clipper.zip"
+                  className="btn-xs btn-primary inbox-clipper-download"
+                >
+                  <Download size={12} />
+                  <span>{dict.clipperDownloadBtn}</span>
+                </a>
+              </div>
+            )}
+          </div>
         </aside>
       )}
     </div>

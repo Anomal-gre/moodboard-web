@@ -3885,8 +3885,14 @@ textarea:focus-visible {
   width: 7px;
   height: 7px;
   border-radius: 999px;
-  background: var(--success);
+  background: var(--ink-muted);
+  opacity: 0.55;
   flex-shrink: 0;
+}
+
+.clipper-status-dot.is-ok {
+  background: var(--success);
+  opacity: 1;
 }
 
 .inbox-clipper-guide {
@@ -3904,6 +3910,14 @@ textarea:focus-visible {
   display: block;
   color: var(--ink);
   margin-bottom: 3px;
+}
+
+.inbox-clipper-download {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  margin-top: 8px;
+  text-decoration: none;
 }
 
 .inbox-clipper-guide p {

@@ -410,10 +410,11 @@ export const en: I18nDict = {
   exportClientHtmlSuccess: 'Exported interactive Read-Only Client Snapshot (.html).',
 
   clipperBadgeConnected: 'Web Clipper ready',
-  clipperBadgeTitle: 'Chrome / Edge Web Clipper',
+  clipperBadgeTitle: 'Mosa Web Clipper Extension',
+  clipperDownloadBtn: 'Download Mosa Clipper (.zip)',
   clipperReceivedToast: (title: string) => `Clipped from Web: "${title}" → Unsorted`,
-  clipperGuideTitle: 'Install Mosa Web Clipper (Chrome / Edge)',
+  clipperGuideTitle: 'Install Mosa Web Clipper (Chrome / Edge / Vivaldi)',
   clipperGuideSteps:
-    'Open edge://extensions or chrome://extensions → Enable Developer mode → Load unpacked and pick the mosa-clipper folder to 1-click save full-res Pinterest / Behance images (CORS-free).',
+    'Download & unzip → Open chrome://extensions → Enable Developer mode → Load unpacked and pick the mosa-clipper folder to 1-click save full-res Pinterest / Behance images (CORS-free).',
   aiFirstRunHint: 'One-time CLIP model download (~80 MB) — runs 100% offline locally thereafter.',
 };

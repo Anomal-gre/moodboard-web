@@ -1,0 +1,96 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Mosa Web Clipper</title>
+  <link rel="stylesheet" href="popup.css" />
+</head>
+<body>
+  <div class="wrap">
+    <!-- Brand Header -->
+    <header class="head">
+      <div class="brand">
+        <img src="icons/icon-128.png" alt="Mosa" class="logo" />
+        <span class="name">Mosa</span>
+      </div>
+      <div class="head-right">
+        <span id="statusPill" class="pill">
+          <span class="pill-dot"></span>
+          <span id="statusText">…</span>
+        </span>
+        <div class="lang-seg" role="group" aria-label="Language">
+          <button type="button" class="lang-btn" data-lang="vi">VI</button>
+          <button type="button" class="lang-btn" data-lang="en">EN</button>
+        </div>
+      </div>
+    </header>
+
+    <!-- 1-Click Tactile 2x3 Category Selector (Zero native select, zero clipping!) -->
+    <section class="section">
+      <span id="catLabel" class="section-label">Save to category</span>
+      <div class="cat-grid" id="catGrid" role="radiogroup" aria-labelledby="catLabel"></div>
+    </section>
+
+    <!-- Hover-Save Toggle Card with Tactile Mini "Mosa" Button Preview + iOS Switch -->
+    <div class="setting-card" id="hoverCard" role="button" tabindex="0">
+      <div class="setting-left">
+        <span class="mini-mosa-btn" aria-hidden="true">
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor">
+            <path d="M11 11H6a4 4 0 0 1-4-4V2h9v9Z"/>
+            <path d="M22 11h-9V6a4 4 0 0 1 4-4h5v9Z"/>
+            <path d="M11 13h5a4 4 0 0 1 4 4v5h-9v-9Z"/>
+            <path d="M2 13h9v5a4 4 0 0 1-4 4H2v-9Z"/>
+          </svg>
+          <span>Mosa</span>
+        </span>
+        <span id="hoverLabel" class="setting-label">Hover save button</span>
+      </div>
+      <label class="ios-switch" aria-label="Toggle hover button">
+        <input type="checkbox" id="hoverToggle" checked />
+        <span class="ios-track">
+          <span class="ios-thumb"></span>
+        </span>
+      </label>
+    </div>
+
+    <!-- Pending Offline Queue Banner (Shown only when clips are queued) -->
+    <div id="queueRow" class="queue-row" hidden>
+      <div class="queue-meta">
+        <span class="queue-dot"></span>
+        <span id="queueText"></span>
+      </div>
+      <button id="flushBtn" class="btn-sync" type="button">Sync</button>
+    </div>
+
+    <!-- Clean 2-Button Action Dock -->
+    <div class="action-row">
+      <button id="captureTabBtn" class="btn btn-primary" type="button">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3z"/>
+          <circle cx="12" cy="13" r="3"/>
+        </svg>
+        <span id="captureTabText">Capture tab</span>
+      </button>
+
+      <button id="openMosaBtn" class="btn btn-open" type="button">
+        <span id="openMosaText">Mosa</span>
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="M7 17 17 7"/>
+          <path d="M7 7h10v10"/>
+        </svg>
+      </button>
+    </div>
+
+    <!-- Live Feedback Banner (Hidden when idle) -->
+    <div id="feedbackBar" class="feedback-bar" hidden></div>
+
+    <!-- Crisp Single-Line Shortcut Footer -->
+    <footer class="foot" id="footBar">
+      <span id="footLeft" class="foot-text">Right-click image</span>
+      <span class="foot-sep">·</span>
+      <span class="kbd-combo"><kbd>Alt</kbd><span>+</span><kbd>Click</kbd></span>
+    </footer>
+  </div>
+  <script src="popup.js"></script>
+</body>
+</html>
