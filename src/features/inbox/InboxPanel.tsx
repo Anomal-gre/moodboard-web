@@ -13,11 +13,13 @@ import {
 import type { Card } from '../../domain/types';
 import type { I18nDict } from '../../i18n';
 import { resolveAssetUrl } from '../../storage/workspaceRepository';
+import { requestLocalClipperCode } from '../clipper/useClipperBridge';
 
 interface InboxPanelProps {
   open: boolean;
   inboxCards: Card[];
   clipperBridgeReady?: boolean;
+  localPairingAvailable?: boolean;
   dict: I18nDict;
   onToggle: () => void;
   onMoveToBoard: (cardId: string) => void;
@@ -79,6 +81,7 @@ export const InboxPanel: React.FC<InboxPanelProps> = ({
   open,
   inboxCards,
   clipperBridgeReady,
+  localPairingAvailable,
   dict,
   onToggle,
   onMoveToBoard,
@@ -87,6 +90,8 @@ export const InboxPanel: React.FC<InboxPanelProps> = ({
 }) => {
   const [dragOver, setDragOver] = useState(false);
   const [clipperGuideOpen, setClipperGuideOpen] = useState(false);
+  const [pairCode, setPairCode] = useState<string | null>(null);
+  const [pairError, setPairError] = useState(false);
 
   return (
     <div className="inbox-anchor">
@@ -180,7 +185,11 @@ export const InboxPanel: React.FC<InboxPanelProps> = ({
               type="button"
               className="inbox-clipper-toggle"
               aria-expanded={clipperGuideOpen}
-              onClick={() => setClipperGuideOpen((v) => !v)}
+              onClick={() => {
+                setPairCode(null);
+                setPairError(false);
+                setClipperGuideOpen((v) => !v);
+              }}
             >
               <span className={`clipper-status-dot ${clipperBridgeReady ? 'is-ok' : ''}`} />
               <Puzzle size={13} />
@@ -204,6 +213,23 @@ export const InboxPanel: React.FC<InboxPanelProps> = ({
                   <Download size={12} />
                   <span>{dict.clipperDownloadBtn}</span>
                 </a>
+                {localPairingAvailable && (
+                  <div className="clipper-pairing">
+                    <button type="button" className="btn-xs" onClick={() => {
+                      setPairError(false);
+                      void requestLocalClipperCode().then(setPairCode, () => setPairError(true));
+                    }}>
+                      {dict.clipperPairCode}
+                    </button>
+                    {pairCode && (
+                      <label className="clipper-pairing-code">
+                        {dict.clipperPairHelp}
+                        <input type="text" value={pairCode} readOnly onFocus={(event) => event.currentTarget.select()} />
+                      </label>
+                    )}
+                    {pairError && <p role="status">{dict.clipperPairUnavailable}</p>}
+                  </div>
+                )}
               </div>
             )}
           </div>

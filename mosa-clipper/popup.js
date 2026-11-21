@@ -8,8 +8,19 @@ const I18N = {
     openMosa: 'Mở Mosa',
     syncNow: 'Đồng bộ',
     queuePending: (n) => `${n} ảnh đang chờ`,
-    capturedOk: 'Đã gửi ảnh chụp tab vào Mosa ✓',
-    capturedQueued: 'Mosa chưa mở · Đã lưu vào hàng chờ',
+    destination: (name) => `Dự án đích · ${name}`,
+    waitingForProject: 'Mở một dự án Mosa để gửi ảnh.',
+    capturedOk: (name) => `Đã lưu ảnh vào ${name}.`,
+    capturedQueued: (name) => name ? `Đang chờ lưu vào ${name}.` : 'Ảnh đang chờ dự án Mosa.',
+    captureError: 'Không lưu được ảnh. Hãy đồng bộ hàng chờ rồi thử lại.',
+    nothingSynced: 'Ảnh vẫn đang chờ dự án đích.',
+    connectionLabel: 'Kết nối Mosa cục bộ hoặc website riêng',
+    siteLabel: 'URL Mosa riêng (tùy chọn)',
+    codeLabel: 'Mã kết nối Mosa cục bộ',
+    clearLabel: 'Xóa mã đã lưu',
+    saveConnection: 'Lưu kết nối',
+    connectionSaved: 'Đã lưu cấu hình kết nối.',
+    connectionInvalid: 'URL hoặc mã kết nối không hợp lệ.',
     syncedOk: (n) => `Đã đồng bộ ${n} ảnh vào Mosa ✓`,
     openMosaFirst: 'Hãy mở ứng dụng Mosa trước khi đồng bộ',
     footLeft: 'Chuột phải lên ảnh',
@@ -31,8 +42,19 @@ const I18N = {
     openMosa: 'Open Mosa',
     syncNow: 'Sync',
     queuePending: (n) => `${n} pending clip${n === 1 ? '' : 's'}`,
-    capturedOk: 'Sent tab screenshot to Mosa ✓',
-    capturedQueued: 'Mosa is closed · Saved to queue',
+    destination: (name) => `Destination · ${name}`,
+    waitingForProject: 'Open a Mosa project to send clips.',
+    capturedOk: (name) => `Saved to ${name}.`,
+    capturedQueued: (name) => name ? `Queued for ${name}.` : 'Queued until a Mosa project is available.',
+    captureError: 'Could not save. Sync queued clips and try again.',
+    nothingSynced: 'Clips are still waiting for their destination project.',
+    connectionLabel: 'Connect local or custom Mosa',
+    siteLabel: 'Custom Mosa URL (optional)',
+    codeLabel: 'Local Mosa connection code',
+    clearLabel: 'Clear saved code',
+    saveConnection: 'Save connection',
+    connectionSaved: 'Connection settings saved.',
+    connectionInvalid: 'Enter a valid Mosa URL or connection code.',
     syncedOk: (n) => `Synced ${n} clip${n === 1 ? '' : 's'} to Mosa ✓`,
     openMosaFirst: 'Open Mosa first to sync queued clips',
     footLeft: 'Right-click any image',
@@ -64,10 +86,17 @@ const flushBtn = document.getElementById('flushBtn');
 const feedbackBar = document.getElementById('feedbackBar');
 const footLeft = document.getElementById('footLeft');
 const langBtns = Array.from(document.querySelectorAll('.lang-btn'));
+const destinationText = document.getElementById('destinationText');
+const connectionForm = document.getElementById('connectionForm');
+const siteUrl = document.getElementById('siteUrl');
+const connectionCode = document.getElementById('connectionCode');
+const clearCode = document.getElementById('clearCode');
+const clearRow = document.getElementById('clearRow');
+const saveConnection = document.getElementById('saveConnection');
 
 let state = {
   connected: false,
-  baseUrl: 'http://127.0.0.1:4313/',
+  destination: null,
   queueCount: 0,
   category: 'other',
   hoverButton: true,
@@ -102,6 +131,10 @@ function render() {
 
   statusPill.classList.toggle('is-ok', state.connected);
   statusText.textContent = state.connected ? dict.connected : dict.offline;
+  destinationText.textContent = state.destination ? dict.destination(state.destination.projectName) : dict.waitingForProject;
+  for (const label of ['connectionLabel', 'siteLabel', 'codeLabel', 'clearLabel', 'saveConnection']) {
+    document.getElementById(label).textContent = dict[label];
+  }
 
   // 2x3 Tactile Category Chip Grid
   catLabel.textContent = dict.catLabel;
@@ -171,13 +204,15 @@ function refreshStatus() {
   chrome.runtime.sendMessage({ type: 'GET_STATUS' }, (res) => {
     if (!res) return;
     state.connected = Boolean(res.connected);
-    state.baseUrl = res.baseUrl || 'http://127.0.0.1:4313/';
+    state.destination = res.destination || null;
     state.queueCount = res.queueCount || 0;
     if (res.settings) {
       state.category = res.settings.category || 'other';
       state.hoverButton = Boolean(res.settings.hoverButton);
       state.lang = res.settings.lang === 'vi' ? 'vi' : 'en';
       state.langManual = Boolean(res.settings.langManual);
+      if (document.activeElement !== siteUrl) siteUrl.value = res.settings.mosaUrl || '';
+      clearRow.hidden = !res.tokenConfigured;
     }
     render();
   });
@@ -212,7 +247,8 @@ captureTabBtn.addEventListener('click', () => {
   chrome.runtime.sendMessage({ type: 'CAPTURE_VISIBLE_TAB', category: state.category }, (res) => {
     captureTabBtn.disabled = false;
     const dict = getDict();
-    showFeedback(res && res.delivered ? dict.capturedOk : dict.capturedQueued);
+    showFeedback(res?.delivered ? dict.capturedOk(res.projectName) :
+      res?.queued ? dict.capturedQueued(res.projectName) : dict.captureError);
     refreshStatus();
   });
 });
@@ -220,8 +256,26 @@ captureTabBtn.addEventListener('click', () => {
 flushBtn.addEventListener('click', () => {
   chrome.runtime.sendMessage({ type: 'FLUSH_QUEUE' }, (res) => {
     const dict = getDict();
-    showFeedback(res && res.ok ? dict.syncedOk(res.flushed || 0) : dict.openMosaFirst);
+    showFeedback(res?.flushed ? dict.syncedOk(res.flushed) : res?.ok ? dict.nothingSynced : dict.openMosaFirst);
     refreshStatus();
+  });
+});
+
+connectionForm.addEventListener('submit', (event) => {
+  event.preventDefault();
+  saveConnection.disabled = true;
+  chrome.runtime.sendMessage({
+    type: 'SET_MOSA_CONNECTION', mosaUrl: siteUrl.value.trim(), token: connectionCode.value,
+    clearToken: clearCode.checked,
+  }, (res) => {
+    saveConnection.disabled = false;
+    const dict = getDict();
+    showFeedback(res?.ok ? dict.connectionSaved : dict.connectionInvalid);
+    if (res?.ok) {
+      connectionCode.value = '';
+      clearCode.checked = false;
+      refreshStatus();
+    }
   });
 });
 

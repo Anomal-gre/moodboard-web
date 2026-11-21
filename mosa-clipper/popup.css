@@ -503,3 +503,35 @@ body {
   font-weight: 650;
   color: var(--ink);
 }
+.destination-text {
+  margin: 6px 0 12px;
+  color: var(--ink-faint);
+  overflow-wrap: anywhere;
+}
+
+.connection-settings {
+  padding: 8px 0;
+  color: var(--ink-faint);
+  font-size: 12px;
+}
+
+.connection-settings summary { cursor: pointer; }
+
+.connection-settings form,
+.connection-settings label:not(.connection-clear) {
+  display: grid;
+  gap: 6px;
+}
+
+.connection-settings form { margin-top: 8px; }
+
+.connection-settings input:not([type='checkbox']) {
+  min-width: 0;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 6px;
+  background: var(--surface);
+  color: var(--ink);
+}
+
+.connection-settings button { justify-self: start; }

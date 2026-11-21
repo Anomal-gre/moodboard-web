@@ -263,11 +263,11 @@ export function sanitizeCard(card: Card): Card {
     ? {
         ...card.source,
         pageUrl:
-          card.source.pageUrl && isValidHttpUrl(card.source.pageUrl)
+          typeof card.source.pageUrl === 'string' && isValidHttpUrl(card.source.pageUrl)
             ? card.source.pageUrl.trim()
             : undefined,
         imageUrl:
-          card.source.imageUrl && isValidHttpUrl(card.source.imageUrl)
+          typeof card.source.imageUrl === 'string' && isValidHttpUrl(card.source.imageUrl)
             ? card.source.imageUrl.trim()
             : undefined,
       }
@@ -316,9 +316,9 @@ export function sanitizeCard(card: Card): Card {
     category,
     title: typeof card.title === 'string' ? normalizeDashes(card.title) : '',
     text: typeof card.text === 'string' ? normalizeDashes(card.text) : '',
-    color: card.color ? (normalizeHex(card.color) ?? undefined) : undefined,
-    textColor: card.textColor ? (normalizeHex(card.textColor) ?? undefined) : undefined,
-    dominantHex: card.dominantHex ? (normalizeHex(card.dominantHex) ?? undefined) : undefined,
+    color: typeof card.color === 'string' ? normalizeHex(card.color) ?? undefined : undefined,
+    textColor: typeof card.textColor === 'string' ? normalizeHex(card.textColor) ?? undefined : undefined,
+    dominantHex: typeof card.dominantHex === 'string' ? normalizeHex(card.dominantHex) ?? undefined : undefined,
     x: isFiniteNumber(card.x) ? card.x : 0,
     y: isFiniteNumber(card.y) ? card.y : 0,
     w: isFiniteNumber(card.w) && card.w >= 40 ? card.w : 220,
@@ -360,10 +360,16 @@ export function validateBackupPayload(
     return { ok: false, reason: 'Danh sách tệp đính kèm không hợp lệ.' };
   }
 
-  for (const card of project.cards) {
-    if (!card || typeof card !== 'object' || typeof card.id !== 'string') {
+  if (project.trash !== undefined && (!Array.isArray(project.trash) ||
+      project.trash.some((item) => !item || typeof item !== 'object' || !item.card))) {
+    return { ok: false, reason: 'Dữ liệu thùng rác trong bản sao không hợp lệ.' };
+  }
+  const cardIds = new Set<string>();
+  for (const card of [...project.cards, ...(project.trash ?? []).map(({ card }) => card)]) {
+    if (!card || typeof card !== 'object' || typeof card.id !== 'string' || !card.id || cardIds.has(card.id)) {
       return { ok: false, reason: 'Phát hiện card không hợp lệ trong bản sao.' };
     }
+    cardIds.add(card.id);
     if (!VALID_KINDS.has(card.kind)) {
       return { ok: false, reason: `Loại card không được hỗ trợ: ${String(card.kind)}` };
     }
@@ -372,14 +378,16 @@ export function validateBackupPayload(
     }
   }
 
+  const assetIds = new Set<string>();
   for (const asset of obj.assets as Array<Record<string, unknown>>) {
     if (!asset || typeof asset !== 'object' || !asset.meta || typeof asset.base64 !== 'string') {
       return { ok: false, reason: 'Dữ liệu tệp đính kèm bị hỏng.' };
     }
     const meta = asset.meta as Record<string, unknown>;
-    if (typeof meta.id !== 'string' || typeof meta.mime !== 'string') {
+    if (typeof meta.id !== 'string' || !meta.id || assetIds.has(meta.id) || typeof meta.mime !== 'string') {
       return { ok: false, reason: 'Định dạng MIME tệp trong bản sao không hợp lệ.' };
     }
+    assetIds.add(meta.id);
   }
 
   return { ok: true, data: raw as BackupFileV1 };

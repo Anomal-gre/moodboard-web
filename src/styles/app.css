@@ -268,8 +268,68 @@ textarea:focus-visible {
 
 .save-indicator--error .save-status,
 .save-indicator--error svg,
+.save-indicator--conflict .save-status,
+.save-indicator--conflict svg,
 .save-retry {
   color: var(--danger);
+}
+
+.save-conflict-banner {
+  position: absolute;
+  z-index: 45;
+  top: calc(var(--workspace-header-height) + 10px);
+  left: 50%;
+  transform: translateX(-50%);
+  width: max-content;
+  max-width: calc(100% - 2 * var(--workspace-gutter));
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 8px 10px;
+  border: 1px solid var(--danger);
+  border-radius: 12px;
+  background: var(--surface-solid);
+  color: var(--ink);
+  font-size: 13px;
+}
+
+.save-conflict-banner > svg {
+  color: var(--danger);
+  flex: none;
+}
+
+.save-conflict-banner > span {
+  flex: 1 1 220px;
+}
+
+.btn.topbar-export-btn {
+  background: var(--surface-subtle);
+  border-color: var(--border);
+  color: var(--ink);
+  font-weight: 600;
+}
+
+.btn.topbar-export-btn:hover:not(:disabled) {
+  background: var(--surface-elevated);
+  border-color: var(--border-strong);
+  color: var(--accent);
+}
+
+.clipper-pairing,
+.clipper-pairing-code {
+  display: grid;
+  gap: 6px;
+}
+
+.clipper-pairing {
+  margin-top: 6px;
+}
+
+.clipper-pairing-code input {
+  min-width: 0;
+  width: 100%;
+  padding: 6px;
 }
 
 .save-retry {
@@ -311,6 +371,7 @@ textarea:focus-visible {
   padding: 0 14px;
   border-radius: var(--radius-sm);
   border: 1px solid transparent;
+  background: transparent;
   font-weight: 550;
   letter-spacing: -0.01em;
   white-space: nowrap;

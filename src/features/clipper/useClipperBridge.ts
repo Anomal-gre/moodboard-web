@@ -1,235 +1,161 @@
 import { useEffect, useRef, useState } from 'react';
-import type { Card, Category } from '../../domain/types';
-import { createId, extractHostname } from '../../domain/validate';
-import { putImageAsset } from '../../storage/workspaceRepository';
+import type { Card } from '../../domain/types';
+import type { ClipReceipt } from '../../storage/projectWrites';
+import { createClipReceiver } from './receiveWebClip';
+import { isClipId, type ClipDestination } from './clipProtocol';
 
-interface IncomingWebClip {
-  id: string;
-  imageBase64?: string;
-  mime?: string;
-  fileName?: string;
-  imageUrl?: string;
-  pageUrl?: string;
-  title?: string;
-  category?: string;
-  note?: string;
-  clippedAt?: string;
+const LOCAL_APP_HEADERS = { 'Content-Type': 'application/json', 'X-Mosa-App': '1' };
+
+function onLoopback(): boolean {
+  return location.protocol === 'http:' && (location.hostname === 'localhost' || location.hostname === '127.0.0.1');
 }
 
-const VALID_CATEGORIES = new Set<Category>([
-  'reference',
-  'furniture',
-  'palette',
-  'material',
-  'sketch',
-  'other',
-]);
+export async function requestLocalClipperCode(): Promise<string> {
+  const response = await fetch('/__mosa_clip/pair', { method: 'POST', headers: LOCAL_APP_HEADERS });
+  if (!response.ok) throw new Error('Local Mosa bridge unavailable');
+  const result = await response.json() as { token?: string };
+  if (!result.token) throw new Error('Local Mosa bridge unavailable');
+  return result.token;
+}
 
-function base64ToBlob(base64: string, mime: string): Blob {
-  const clean = base64.includes(',') ? base64.split(',')[1] : base64;
-  const bin = atob(clean);
-  const bytes = new Uint8Array(bin.length);
-  for (let i = 0; i < bin.length; i++) {
-    bytes[i] = bin.charCodeAt(i);
+interface BridgeOptions {
+  enabled: boolean;
+  language: 'vi' | 'en';
+  destination?: ClipDestination;
+  canReceive: (projectId: string) => boolean;
+  onCommit: (card: Card, projectId: string, clipId: string) => Promise<boolean>;
+}
+
+export function useClipperBridge({ enabled, language, destination, canReceive, onCommit }: BridgeOptions) {
+  const [direct, setDirect] = useState(false);
+  const [pairedLocal, setPairedLocal] = useState(false);
+  const local = onLoopback();
+  const options = useRef({ language, destination, canReceive, onCommit });
+  options.current = { language, destination, canReceive, onCommit };
+  const receiver = useRef<ReturnType<typeof createClipReceiver> | null>(null);
+  if (!receiver.current) {
+    receiver.current = createClipReceiver(
+      (card, id, clipId) => options.current.onCommit(card, id, clipId),
+      (id) => options.current.canReceive(id),
+    );
   }
-  return new Blob([bytes], { type: mime || 'image/jpeg' });
-}
 
-export function useClipperBridge(
-  enabled: boolean,
-  language: 'vi' | 'en',
-  onClipCardReady: (card: Card) => void
-): { bridgeAvailable: boolean } {
-  const [bridgeAvailable, setBridgeAvailable] = useState(false);
-  const localHttpBridgeRef = useRef(false);
-  const processingRef = useRef(false);
-  const handledIdsRef = useRef<Set<string>>(new Set());
-  const cbRef = useRef(onClipCardReady);
-  cbRef.current = onClipCardReady;
-
-  const ingestClipItem = useRef(async (item: IncomingWebClip): Promise<boolean> => {
-    if (!item || !item.id) return false;
-    if (handledIdsRef.current.has(item.id)) return true;
-    handledIdsRef.current.add(item.id);
-
-    const now = item.clippedAt || new Date().toISOString();
-    const cat: Category =
-      item.category && VALID_CATEGORIES.has(item.category as Category)
-        ? (item.category as Category)
-        : 'other';
-
-    const fallbackTitle =
-      item.title?.trim() ||
-      (item.pageUrl ? extractHostname(item.pageUrl) : '') ||
-      item.fileName ||
-      'Web Clip';
-
-    let assetId: string | undefined;
-    let w = 280;
-    let h = 210;
-    let imageStatus: Card['imageStatus'] = 'remote-only';
-
-    if (item.imageBase64) {
-      try {
-        const blob = base64ToBlob(item.imageBase64, item.mime || 'image/jpeg');
-        const meta = await putImageAsset(blob, item.fileName || 'web-clip.jpg');
-        assetId = meta.id;
-        imageStatus = 'ready';
-        if (meta.width > 0 && meta.height > 0) {
-          const targetW = 280;
-          const ratio = meta.width / meta.height;
-          w = targetW;
-          h = Math.max(120, Math.min(420, Math.round(targetW / Math.max(0.4, Math.min(2.6, ratio)))));
-        }
-      } catch {
-        // Fall back to remote URL if decoding failed
-      }
-    }
-
-    if (assetId || item.imageUrl) {
-      const card: Card = {
-        id: createId('crd'),
-        kind: 'image',
-        title: fallbackTitle,
-        text: item.note?.trim() || '',
-        category: cat,
-        x: 120,
-        y: 120,
-        w,
-        h,
-        z: 1,
-        inbox: true,
-        locked: false,
-        assetId,
-        imageStatus,
-        source: {
-          pageUrl: item.pageUrl,
-          imageUrl: item.imageUrl,
-          fileName: item.fileName || 'web-clip.jpg',
-          method: 'web-drop',
-          capturedAt: now,
-        },
-        createdAt: now,
-        updatedAt: now,
-      };
-      cbRef.current(card);
-    }
-    return true;
-  });
-
-  // Expose Mosa presence & active language for direct browser-extension tab bridge (works on GitHub Pages & local)
   useEffect(() => {
-    if (!enabled) return;
-    document.documentElement.dataset.mosaApp = '1';
-    document.documentElement.dataset.mosaLang = language;
-    window.postMessage({ type: 'MOSA_APP_READY', lang: language }, '*');
-
-    if (localHttpBridgeRef.current) {
-      fetch('/__mosa_clip/lang', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ lang: language }),
-      }).catch(() => undefined);
-    }
-  }, [enabled, language, bridgeAvailable]);
-
-  // Direct extension <-> tab postMessage bridge (works on GitHub Pages, Vercel, localhost, anywhere)
-  useEffect(() => {
-    if (!enabled) return;
+    if (!enabled || window.top !== window) return;
+    const receive = receiver.current!;
+    const announce = () => window.postMessage({ type: 'MOSA_APP_READY', version: 2 }, location.origin);
     const onMessage = (event: MessageEvent) => {
-      if (event.source !== window || !event.data || typeof event.data !== 'object') return;
-      const msg = event.data as { type?: string; clip?: IncomingWebClip };
-
-      if (msg.type === 'MOSA_EXT_HELLO') {
-        setBridgeAvailable(true);
-        window.postMessage(
-          { type: 'MOSA_APP_READY', lang: document.documentElement.dataset.mosaLang || 'vi' },
-          '*'
-        );
+      if (event.source !== window || event.origin !== location.origin || event.data?.version !== 2) return;
+      const message = event.data;
+      if (message.type === 'MOSA_EXT_HELLO') {
+        setDirect(true);
         return;
       }
-
-      if (msg.type === 'MOSA_EXT_CLIP_PUSH' && msg.clip) {
-        setBridgeAvailable(true);
-        const clip = msg.clip;
-        void ingestClipItem.current(clip).then((ok) => {
-          window.postMessage({ type: 'MOSA_APP_CLIP_ACK', id: clip.id, ok }, '*');
-        });
-      }
+      if (message.type !== 'MOSA_EXT_CLIP_PUSH' || !isClipId(message.requestId)) return;
+      setDirect(true);
+      const reply = (receipt?: ClipReceipt) => {
+        window.postMessage({
+          type: 'MOSA_APP_CLIP_ACK',
+          version: 2,
+          requestId: message.requestId,
+          receipt,
+        }, location.origin);
+      };
+      void receive(message.clip, message.projectId).then(reply, () => reply());
     };
-
     window.addEventListener('message', onMessage);
+    window.addEventListener('mosa-clipper-retry', announce);
     return () => {
       window.removeEventListener('message', onMessage);
-      delete document.documentElement.dataset.mosaApp;
-      delete document.documentElement.dataset.mosaLang;
+      window.removeEventListener('mosa-clipper-retry', announce);
     };
   }, [enabled]);
 
-  // Local Vite dev/preview HTTP bridge fallback (allows clipping even when Mosa tab is backgrounded/closed locally)
   useEffect(() => {
-    if (!enabled) return;
-    let alive = true;
-    let timer: number | null = null;
-
-    const drainPending = async () => {
-      if (!alive || processingRef.current) return;
-      processingRef.current = true;
-      try {
-        const res = await fetch('/__mosa_clip/pending', { cache: 'no-store' });
-        if (!res.ok) return;
-        const ct = res.headers.get('content-type') || '';
-        if (!ct.includes('application/json')) return;
-        const data = (await res.json()) as { ok?: boolean; items?: IncomingWebClip[] };
-        if (!data.ok || !Array.isArray(data.items) || data.items.length === 0) return;
-
-        const ackIds: string[] = [];
-        for (const item of data.items) {
-          await ingestClipItem.current(item);
-          ackIds.push(item.id);
-        }
-
-        if (ackIds.length > 0) {
-          await fetch('/__mosa_clip/ack', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ ids: ackIds }),
-          }).catch(() => undefined);
-        }
-      } catch {
-        // Ignore transient bridge errors
-      } finally {
-        processingRef.current = false;
-      }
-    };
-
-    const boot = async () => {
-      try {
-        const res = await fetch('/__mosa_clip/health', { cache: 'no-store' });
-        const ct = res.headers.get('content-type') || '';
-        if (!res.ok || !ct.includes('application/json')) return;
-        const json = (await res.json()) as { ok?: boolean; app?: string };
-        if (!alive || !json.ok || json.app !== 'Mosa') return;
-        localHttpBridgeRef.current = true;
-        setBridgeAvailable(true);
-        await drainPending();
-        timer = window.setInterval(() => {
-          void drainPending();
-        }, 1800);
-        window.addEventListener('focus', drainPending);
-      } catch {
-        // Static hosting (GitHub Pages / Vercel) -> tab postMessage bridge handles extension directly
-      }
-    };
-
-    void boot();
+    if (!enabled || window.top !== window) return;
+    const { dataset } = document.documentElement;
+    dataset.mosaApp = '1';
+    dataset.mosaLang = language;
+    dataset.mosaProjectId = destination?.projectId || '';
+    dataset.mosaProjectName = destination?.projectName || '';
+    window.postMessage({ type: 'MOSA_APP_READY', version: 2 }, location.origin);
     return () => {
-      alive = false;
-      localHttpBridgeRef.current = false;
-      if (timer !== null) window.clearInterval(timer);
-      window.removeEventListener('focus', drainPending);
+      delete dataset.mosaApp;
+      delete dataset.mosaLang;
+      delete dataset.mosaProjectId;
+      delete dataset.mosaProjectName;
     };
-  }, [enabled]);
+  }, [enabled, language, destination?.projectId, destination?.projectName]);
 
-  return { bridgeAvailable };
+  useEffect(() => {
+    if (!enabled || !local || window.top !== window) return;
+    const controller = new AbortController();
+    const receive = receiver.current!;
+    let busy = false;
+    let activity = Date.now();
+    let previousProjectId: string | undefined;
+    let interval: number | undefined;
+    const pulse = async () => {
+      if (busy || controller.signal.aborted) return;
+      busy = true;
+      try {
+        const { destination, language } = options.current;
+        if (previousProjectId !== destination?.projectId) {
+          previousProjectId = destination?.projectId;
+          activity = Date.now();
+        }
+        const response = await fetch('/__mosa_clip/app', {
+          method: 'POST',
+          headers: LOCAL_APP_HEADERS,
+          signal: controller.signal,
+          body: JSON.stringify({ language, destination, activity }),
+        });
+        if (!response.ok || !response.headers.get('content-type')?.includes('application/json')) {
+          window.clearInterval(interval);
+          return;
+        }
+        const data = await response.json() as {
+          paired?: boolean;
+          items?: Array<{ clip: unknown; projectId: unknown }>;
+        };
+        setPairedLocal(data.paired === true);
+        for (const item of data.items ?? []) {
+          if (controller.signal.aborted) break;
+          const clipId = (item.clip as { id?: unknown } | null)?.id;
+          if (!isClipId(clipId)) continue;
+          try {
+            const receipt = await receive(item.clip, item.projectId);
+            if (receipt) {
+              await fetch('/__mosa_clip/ack', {
+                method: 'POST',
+                headers: LOCAL_APP_HEADERS,
+                signal: controller.signal,
+                body: JSON.stringify({ clipId, receipt }),
+              });
+            }
+          } catch {
+            // The extension retains the clip until the database confirms it.
+          }
+        }
+      } catch {
+        // The local bridge may be restarting.
+      } finally {
+        busy = false;
+      }
+    };
+    const focus = () => {
+      activity = Date.now();
+      void pulse();
+    };
+    interval = window.setInterval(() => void pulse(), 1800);
+    window.addEventListener('focus', focus);
+    void pulse();
+    return () => {
+      controller.abort();
+      window.clearInterval(interval);
+      window.removeEventListener('focus', focus);
+    };
+  }, [enabled, local]);
+
+  return { bridgeAvailable: direct || pairedLocal, localPairingAvailable: local };
 }

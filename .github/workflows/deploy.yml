@@ -3,15 +3,15 @@ name: Deploy Mosa to GitHub Pages
 on:
   push:
     branches: ['main']
+  pull_request:
+    branches: ['main']
   workflow_dispatch:
 
 permissions:
   contents: read
-  pages: write
-  id-token: write
 
 concurrency:
-  group: pages
+  group: mosa-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
@@ -27,14 +27,21 @@ jobs:
           cache: npm
       - name: Install dependencies
         run: npm ci
+      - name: Run regression tests
+        run: npm test
       - name: Build production bundle
         run: npm run build
       - name: Upload Pages artifact
+        if: github.event_name != 'pull_request'
         uses: actions/upload-pages-artifact@v3
         with:
           path: ./dist
 
   deploy:
+    if: github.event_name != 'pull_request'
+    permissions:
+      pages: write
+      id-token: write
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
@@ -44,3 +51,21 @@ jobs:
       - name: Deploy to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v4
+
+  desktop-check:
+    if: github.event_name == 'pull_request'
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Install dependencies
+        run: npm ci
+      - name: Build desktop frontend
+        run: npm run build
+      - name: Check Tauri commands on Windows
+        run: cargo check --manifest-path src-tauri/Cargo.toml

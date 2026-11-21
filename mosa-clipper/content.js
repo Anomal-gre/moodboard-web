@@ -4,18 +4,23 @@
   let currentLang = 'en';
   let activeImg = null;
   let resetTimer = null;
+  let customMosaUrl = '';
 
   function isMosaAppPage() {
-    return document.documentElement?.dataset?.mosaApp === '1';
+    return window.top === window && Boolean(trustedMosaUrl(location.href, customMosaUrl)) &&
+      document.documentElement?.dataset?.mosaApp === '1';
   }
+
+  const hello = () => window.postMessage({ type: 'MOSA_EXT_HELLO', version: MOSA_BRIDGE_VERSION }, location.origin);
 
   // Announce extension presence when running on a Mosa web app tab (GitHub Pages, Vercel, or local)
   function notifyMosaTabIfReady() {
     if (!isMosaAppPage()) return;
-    window.postMessage({ type: 'MOSA_EXT_HELLO' }, '*');
+    hello();
     chrome.runtime
       .sendMessage({
         type: 'MOSA_APP_OPENED',
+        version: MOSA_BRIDGE_VERSION,
         lang: document.documentElement.dataset.mosaLang || null,
         url: window.location.href,
       })
@@ -23,8 +28,8 @@
   }
 
   window.addEventListener('message', (event) => {
-    if (event.source !== window || !event.data || typeof event.data !== 'object') return;
-    if (event.data.type === 'MOSA_APP_READY') {
+    if (event.source !== window || event.origin !== location.origin) return;
+    if (event.data?.type === 'MOSA_APP_READY' && event.data.version === MOSA_BRIDGE_VERSION) {
       notifyMosaTabIfReady();
     }
   });
@@ -49,6 +54,8 @@
 
   function applySettings(s) {
     if (!s) return;
+    const previousUrl = customMosaUrl;
+    customMosaUrl = normalizeMosaUrl(s.mosaUrl);
     if (typeof s.hoverButton === 'boolean') hoverEnabled = s.hoverButton;
     if (s.lang === 'vi' || s.lang === 'en') currentLang = s.lang;
     btn.title =
@@ -56,6 +63,7 @@
         ? 'Lưu ảnh gốc vào Mosa (hoặc Alt + Click)'
         : 'Save original image to Mosa (or Alt + Click)';
     if (!hoverEnabled) hideBtn();
+    if (previousUrl !== customMosaUrl) notifyMosaTabIfReady();
   }
 
   chrome.storage.local.get('mosaClipperSettings', (res) => {
@@ -130,15 +138,19 @@
         if (res && res.delivered) {
           btn.classList.add('is-saved');
           btn.innerHTML = `${CHECK_ICON_SVG}<span>${isVi ? 'Đã lưu' : 'Saved'}</span>`;
-          showToast(isVi ? 'Đã lưu ảnh gốc vào Mosa ✓' : 'Saved original image to Mosa ✓');
-        } else {
+          showToast(isVi ? `Đã lưu vào ${res.projectName}` : `Saved to ${res.projectName}`);
+        } else if (res?.queued) {
           btn.classList.add('is-saved');
           btn.innerHTML = `${CHECK_ICON_SVG}<span>${isVi ? 'Đã xếp hàng' : 'Queued'}</span>`;
           showToast(
-            isVi
-              ? 'Mosa chưa mở · Đã lưu vào hàng chờ'
-              : 'Mosa is closed · Saved to sync queue'
+            res.projectName
+              ? isVi ? `Đang chờ lưu vào ${res.projectName}` : `Queued for ${res.projectName}`
+              : isVi ? 'Ảnh đang chờ dự án Mosa' : 'Queued until a Mosa project is available'
           );
+        } else {
+          resetBtnLabel();
+          showToast(isVi ? 'Không lưu được ảnh. Hãy đồng bộ hàng chờ rồi thử lại.' : 'Could not save. Sync queued clips and try again.');
+          return;
         }
         resetTimer = setTimeout(resetBtnLabel, 1400);
       }
@@ -197,22 +209,24 @@
     { passive: true }
   );
 
-  chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
-    if (!msg || typeof msg !== 'object') return false;
+  chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
+    if (!msg || typeof msg !== 'object' || sender.id !== chrome.runtime.id) return false;
 
     if (msg.type === 'MOSA_SHOW_TOAST' && msg.text) {
       showToast(msg.text);
       return false;
     }
 
+    if (msg.version !== MOSA_BRIDGE_VERSION) return false;
     if (msg.type === 'MOSA_TAB_PING') {
       if (isMosaAppPage()) {
-        window.postMessage({ type: 'MOSA_EXT_HELLO' }, '*');
+        hello();
+        const { mosaLang, mosaProjectId, mosaProjectName } = document.documentElement.dataset;
         sendResponse({
           ok: true,
-          app: 'Mosa',
-          lang: document.documentElement.dataset.mosaLang || null,
-          url: window.location.href,
+          version: MOSA_BRIDGE_VERSION,
+          lang: mosaLang,
+          destination: readMosaDestination({ projectId: mosaProjectId, projectName: mosaProjectName }),
         });
       } else {
         sendResponse({ ok: false });
@@ -221,28 +235,29 @@
     }
 
     if (msg.type === 'MOSA_TAB_PUSH_CLIP' && msg.clip) {
-      if (!isMosaAppPage()) {
+      if (!isMosaAppPage() || trustedMosaUrl(location.href, customMosaUrl) !== msg.base ||
+          !isMosaProjectId(msg.projectId) || !isMosaProjectId(msg.requestId)) {
         sendResponse({ ok: false });
         return false;
       }
-      const targetId = msg.clip.id;
       let settled = false;
-      const finish = (ok) => {
+      const finish = (receipt) => {
         if (settled) return;
         settled = true;
         window.removeEventListener('message', onAck);
         clearTimeout(timeout);
-        sendResponse({ ok });
+        sendResponse({ receipt });
       };
       const onAck = (event) => {
-        if (event.source !== window || !event.data) return;
-        if (event.data.type === 'MOSA_APP_CLIP_ACK' && event.data.id === targetId) {
-          finish(Boolean(event.data.ok));
+        if (event.source !== window || event.origin !== location.origin || event.data?.version !== MOSA_BRIDGE_VERSION) return;
+        if (event.data.type === 'MOSA_APP_CLIP_ACK' && event.data.requestId === msg.requestId) {
+          finish(readMosaDestination(event.data.receipt));
         }
       };
-      const timeout = setTimeout(() => finish(false), 5000);
+      const timeout = setTimeout(() => finish(null), 8000);
       window.addEventListener('message', onAck);
-      window.postMessage({ type: 'MOSA_EXT_CLIP_PUSH', clip: msg.clip }, '*');
+      window.postMessage({ type: 'MOSA_EXT_CLIP_PUSH', version: MOSA_BRIDGE_VERSION,
+        clip: msg.clip, projectId: msg.projectId, requestId: msg.requestId }, location.origin);
       return true;
     }
 

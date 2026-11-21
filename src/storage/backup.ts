@@ -5,39 +5,42 @@ import type {
   BackupFileV1,
   Project,
 } from '../domain/types';
-import { createId, sanitizeCard, validateBackupPayload } from '../domain/validate';
+import { createId, isValidHttpUrl, normalizeHex, sanitizeCard, validateBackupPayload } from '../domain/validate';
+import { clampZoom } from '../domain/geometry';
 import { base64ToBlob, blobToBase64, processUploadedImage } from './assets';
 import { idbRunTransaction, STORES } from './indexedDb';
 import { getAssetBlob, getAssetMeta } from './workspaceRepository';
 
 export const MAX_BACKUP_FILE_BYTES = 100 * 1024 * 1024; // 100 MB
+const BACKUP_TOO_LARGE = 'Tệp bản sao vượt quá giới hạn an toàn 100 MB.';
 
 export async function exportProjectBackup(
   project: Project,
   onProgress?: (done: number, total: number) => void
 ): Promise<Blob> {
-  // Collect all unique referenced assetIds across active cards and trash
+  // Include original images so cutouts can still be reverted after import.
   const assetIds = new Set<string>();
-  for (const c of project.cards) {
-    if (c.assetId) assetIds.add(c.assetId);
-  }
-  for (const t of project.trash) {
-    if (t.card.assetId) assetIds.add(t.card.assetId);
+  for (const card of [...project.cards, ...project.trash.map(({ card }) => card)]) {
+    if (card.assetId) assetIds.add(card.assetId);
+    if (card.originalAssetId) assetIds.add(card.originalAssetId);
   }
 
   const ids = [...assetIds];
   const assets: BackupAssetEntry[] = [];
+  let encodedBytes = 0;
 
   for (let i = 0; i < ids.length; i++) {
     const id = ids[i];
     const meta = await getAssetMeta(id);
     const blob = await getAssetBlob(id, false);
     if (meta && blob) {
+      encodedBytes += 4 * Math.ceil(blob.size / 3);
+      if (encodedBytes > MAX_BACKUP_FILE_BYTES) throw new Error(BACKUP_TOO_LARGE);
       const base64 = await blobToBase64(blob);
       assets.push({
         meta: {
           ...meta,
-          mime: blob.type || meta.mime || 'image/jpeg',
+          mime: blob.type || meta.mime || 'application/octet-stream',
           size: blob.size,
           samplePath: undefined, // Pack portable bytes
         },
@@ -47,22 +50,25 @@ export async function exportProjectBackup(
     onProgress?.(i + 1, ids.length);
   }
 
+  const { revision, ...portableProject } = project;
   const payload: BackupFileV1 = {
     format: 'mosa-backup',
     version: 1,
     exportedAt: new Date().toISOString(),
-    project,
+    project: portableProject,
     assets,
   };
 
-  return new Blob([JSON.stringify(payload)], { type: 'application/json' });
+  const backup = new Blob([JSON.stringify(payload)], { type: 'application/json' });
+  if (backup.size > MAX_BACKUP_FILE_BYTES) throw new Error(BACKUP_TOO_LARGE);
+  return backup;
 }
 
 export async function parseAndValidateBackupFile(
   file: File
 ): Promise<{ ok: true; data: BackupFileV1 } | { ok: false; reason: string }> {
   if (file.size > MAX_BACKUP_FILE_BYTES) {
-    return { ok: false, reason: 'Tệp bản sao vượt quá giới hạn an toàn 100 MB.' };
+    return { ok: false, reason: BACKUP_TOO_LARGE };
   }
   try {
     const text = await file.text();
@@ -84,42 +90,44 @@ export async function commitImportedBackup(
   const assetIdMap = new Map<string, string>();
   const preparedMetas: AssetMeta[] = [];
   const preparedBytes: AssetBytesRecord[] = [];
+  const allCards = [...backup.project.cards, ...(backup.project.trash ?? []).map(({ card }) => card)];
+  const fileAssets = new Set(allCards.filter((card) => card.kind === 'file').map((card) => card.assetId));
+  const imageAssets = new Set<string>();
+  for (const card of allCards) {
+    if (card.kind !== 'image') continue;
+    if (card.assetId) imageAssets.add(card.assetId);
+    if (card.originalAssetId) imageAssets.add(card.originalAssetId);
+  }
 
   for (let i = 0; i < backup.assets.length; i++) {
     const entry = backup.assets[i];
-    const newAssetId = createId('ast');
+    const isImage = imageAssets.has(entry.meta.id) ||
+      (!fileAssets.has(entry.meta.id) && entry.meta.mime.startsWith('image/'));
+    const newAssetId = createId(isImage ? 'ast' : 'fil');
     assetIdMap.set(entry.meta.id, newAssetId);
 
-    const blob = base64ToBlob(entry.base64, entry.meta.mime || 'image/jpeg');
-    const decoded = await processUploadedImage(blob);
+    const blob = base64ToBlob(entry.base64, entry.meta.mime || 'application/octet-stream');
+    const decoded = isImage ? await processUploadedImage(blob) : undefined;
 
     preparedMetas.push({
       id: newAssetId,
-      fileName: entry.meta.fileName || 'imported-image.jpg',
-      mime: blob.type || entry.meta.mime || 'image/jpeg',
+      fileName: typeof entry.meta.fileName === 'string' && entry.meta.fileName
+        ? entry.meta.fileName : isImage ? 'imported-image.jpg' : 'document.bin',
+      mime: blob.type || entry.meta.mime || 'application/octet-stream',
       size: blob.size,
-      width: decoded.width,
-      height: decoded.height,
-      digest: decoded.digest,
+      width: decoded?.width ?? 0,
+      height: decoded?.height ?? 0,
+      digest: decoded?.digest,
     });
     preparedBytes.push({
       id: newAssetId,
       blob,
-      thumbnail: decoded.thumbnail,
+      thumbnail: decoded?.thumbnail ?? blob,
     });
     onProgress?.(i + 1, backup.assets.length);
   }
 
-  // Remap card IDs and groupIds cleanly
-  const cardIdMap = new Map<string, string>();
-  for (const c of backup.project.cards) {
-    cardIdMap.set(c.id, createId('crd'));
-  }
-  for (const t of backup.project.trash ?? []) {
-    if (!cardIdMap.has(t.card.id)) {
-      cardIdMap.set(t.card.id, createId('crd'));
-    }
-  }
+  const cardIdMap = new Map(allCards.map((card) => [card.id, createId('crd')]));
 
   const remapCard = (c: Project['cards'][number]) => {
     const newId = cardIdMap.get(c.id) ?? createId('crd');
@@ -130,11 +138,16 @@ export async function commitImportedBackup(
       id: newId,
       groupId: newGroupId,
       assetId: newAssetId,
+      originalAssetId: c.originalAssetId ? assetIdMap.get(c.originalAssetId) : undefined,
+      aiClassifiedAssetId: c.aiClassifiedAssetId ? assetIdMap.get(c.aiClassifiedAssetId) : undefined,
+      linksTo: Array.isArray(c.linksTo)
+        ? c.linksTo.map((id) => cardIdMap.get(id)).filter((id): id is string => id !== undefined)
+        : undefined,
       imageStatus:
         c.kind === 'image'
           ? newAssetId
             ? 'ready'
-            : c.source?.imageUrl
+            : typeof c.source?.imageUrl === 'string' && isValidHttpUrl(c.source.imageUrl)
               ? 'remote-only'
               : 'missing'
           : undefined,
@@ -142,18 +155,27 @@ export async function commitImportedBackup(
   };
 
   const now = new Date().toISOString();
+  const { name, description, status, clientName, projectCode, pinned, coverDataUrl, appearance, view } = backup.project;
   const importedProject: Project = {
     id: createId('proj'),
-    name: `${backup.project.name || 'Dự án nhập'} (Bản sao)`,
-    description: backup.project.description || '',
+    revision: 0,
+    name: `${typeof name === 'string' && name.trim() ? name : 'Dự án nhập'} (Bản sao)`,
+    description: typeof description === 'string' ? description : '',
+    status: status === 'draft' || status === 'review' || status === 'approved' ? status : undefined,
+    clientName: typeof clientName === 'string' ? clientName : undefined,
+    projectCode: typeof projectCode === 'string' ? projectCode : undefined,
+    pinned: typeof pinned === 'boolean' ? pinned : undefined,
+    coverDataUrl: typeof coverDataUrl === 'string' && /^data:image\/(png|jpeg|webp);base64,/i.test(coverDataUrl)
+      ? coverDataUrl : undefined,
     appearance: {
-      background: backup.project.appearance?.background || '#F1F0EB',
-      dots: backup.project.appearance?.dots ?? true,
+      background: typeof appearance?.background === 'string' ? normalizeHex(appearance.background) ?? '#F1F0EB' : '#F1F0EB',
+      dots: typeof appearance?.dots === 'boolean' ? appearance.dots : true,
+      grayscale: typeof appearance?.grayscale === 'boolean' ? appearance.grayscale : undefined,
     },
     view: {
-      x: backup.project.view?.x ?? 80,
-      y: backup.project.view?.y ?? 80,
-      zoom: backup.project.view?.zoom ?? 1,
+      x: Number.isFinite(view?.x) ? view.x : 80,
+      y: Number.isFinite(view?.y) ? view.y : 80,
+      zoom: Number.isFinite(view?.zoom) ? clampZoom(view.zoom) : 1,
     },
     cards: backup.project.cards.map(remapCard),
     trash: (backup.project.trash ?? []).map((t) => ({
@@ -172,7 +194,7 @@ export async function commitImportedBackup(
       const assetBytesStore = tx.objectStore(STORES.ASSET_BYTES);
       for (const m of preparedMetas) assetMetaStore.put(m);
       for (const b of preparedBytes) assetBytesStore.put(b);
-      tx.objectStore(STORES.PROJECTS).put(importedProject);
+      tx.objectStore(STORES.PROJECTS).add(importedProject);
     }
   );
 

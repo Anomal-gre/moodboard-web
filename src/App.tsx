@@ -3,8 +3,10 @@ import {
   Check,
   CircleAlert,
   CircleDashed,
+  Compass,
   Download,
   FileArchive,
+  Focus,
   ImagePlus,
   Keyboard,
   LayoutGrid,
@@ -15,6 +17,7 @@ import {
   MoreHorizontal,
   MoveUpRight,
   Palette,
+  PanelRightOpen,
   Plus,
   Presentation,
   Redo2,
@@ -31,11 +34,10 @@ import type {
   Project,
   ProjectAppearance,
   ProjectView,
-  SaveStatus,
   StudioProfile,
   WorkspaceMeta,
 } from './domain/types';
-import { createEmptyProject, getNextZ } from './domain/project';
+import { createEmptyProject, DEFAULT_DARK_BG, DEFAULT_LIGHT_BG, getNextZ } from './domain/project';
 import {
   createProjectFromTemplate,
   type ProjectTemplateId,
@@ -75,27 +77,28 @@ import {
 } from './domain/paletteExtract';
 import { getDict, type Language } from './i18n';
 import {
-  deleteProjectById,
+  deleteProject,
   duplicateProject,
   getAssetBlob,
   initWorkspace,
   putImageAsset,
+  reloadProjectForEditing,
   revokeAllCachedAssetUrls,
   saveProject,
+  saveProjectCover,
   saveWorkspaceMeta,
 } from './storage/workspaceRepository';
 import {
-  checkDirectoryPermission,
   getSavedSyncDirectory,
   isFolderSyncSupported,
   openMosaFilePickerNative,
   saveProjectAsMosaFile,
-  syncProjectToDirectory,
   type FsDirectoryHandle,
 } from './storage/localFolderSync';
 import { commitImportedBackup, parseAndValidateBackupFile } from './storage/backup';
 import { decodeImageElement } from './storage/assets';
-import { resetDbConnection } from './storage/indexedDb';
+import { ProjectConflictError } from './storage/projectWrites';
+import { useProjectPersistence } from './storage/useProjectPersistence';
 import { BoardViewport } from './board/BoardViewport';
 import { CanvasContextMenu, type ContextMenuState } from './board/CanvasContextMenu';
 import { SelectionOverlay } from './board/SelectionOverlay';
@@ -120,6 +123,13 @@ const ExportModal = lazy(() =>
 const BackupModal = lazy(() =>
   import('./features/export/BackupModal').then((m) => ({ default: m.BackupModal }))
 );
+const LandingPage = lazy(() =>
+  import('./features/landing/LandingPage').then((m) => ({ default: m.LandingPage }))
+);
+const OnboardingModal = lazy(() =>
+  import('./features/landing/OnboardingModal').then((m) => ({ default: m.OnboardingModal }))
+);
+import type { OnboardingResult } from './features/landing/OnboardingModal';
 import { ShortcutsModal } from './features/export/ShortcutsModal';
 import { AddLinkModal } from './features/capture/AddLinkModal';
 import { LightboxModal } from './features/capture/LightboxModal';
@@ -170,10 +180,11 @@ export const App: React.FC = () => {
   const [meta, setMeta] = useState<WorkspaceMeta | null>(null);
   const [projects, setProjects] = useState<Project[]>([]);
   const [activeProjectId, setActiveProjectId] = useState<string>('');
-  const [saveStatus, setSaveStatus] = useState<SaveStatus>('saved');
+  const [resolvingConflict, setResolvingConflict] = useState(false);
 
   // Selection, editing & UI modes
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [inspectorHiddenForCard, setInspectorHiddenForCard] = useState<string | null>(null);
   const [editingCardId, setEditingCardId] = useState<string | null>(null);
   const [croppingCardId, setCroppingCardId] = useState<string | null>(null);
   const [cuttingOutCardId, setCuttingOutCardId] = useState<string | null>(null);
@@ -207,12 +218,9 @@ export const App: React.FC = () => {
   const [exportOpen, setExportOpen] = useState(false);
   const [backupOpen, setBackupOpen] = useState(false);
   const [projectHubOpen, setProjectHubOpen] = useState(false);
+  const [landingOpen, setLandingOpen] = useState(false);
+  const [onboardingOpen, setOnboardingOpen] = useState(false);
   const [syncFolderHandle, setSyncFolderHandle] = useState<FsDirectoryHandle | null>(null);
-  const syncFolderRef = useRef<FsDirectoryHandle | null>(null);
-  syncFolderRef.current = syncFolderHandle;
-  const folderSyncTimersRef = useRef<Map<string, number>>(new Map());
-  const metaRef = useRef<WorkspaceMeta | null>(meta);
-  metaRef.current = meta;
   const [addLinkOpen, setAddLinkOpen] = useState(false);
   const [trashOpen, setTrashOpen] = useState(false);
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
@@ -232,7 +240,6 @@ export const App: React.FC = () => {
   const moreMenuRef = useRef<HTMLDivElement | null>(null);
   const historyMapRef = useRef<Map<string, ProjectHistoryStack>>(new Map());
   const [, bumpHistoryVersion] = useState(0);
-  const saveTimersRef = useRef<Map<string, number>>(new Map());
   const projectsRef = useRef<Project[]>(projects);
   projectsRef.current = projects;
   const activeProjectIdRef = useRef<string>(activeProjectId);
@@ -253,7 +260,6 @@ export const App: React.FC = () => {
   const bootWorkspace = useCallback(async () => {
     setLoading(true);
     setStorageFatal(null);
-    resetDbConnection();
     try {
       const init = await initWorkspace();
       setMeta(init.meta);
@@ -276,7 +282,18 @@ export const App: React.FC = () => {
         const fitted = fitWorkspaceView(boardCards, window.innerWidth, window.innerHeight);
         const fittedProj: Project = { ...init.activeProject, view: fitted };
         setProjects([fittedProj]);
-        void saveProject(fittedProj);
+      }
+
+      // Show Apple-style Landing Page for first-time visitors (or when ?home=1 / #home is requested)
+      const params = new URLSearchParams(window.location.search);
+      const forceHome = params.get('home') === '1' || window.location.hash === '#home';
+      const hasExistingActivity =
+        Boolean(init.meta.onboardingCompleted) ||
+        init.projects.length > 1 ||
+        (init.activeProject.revision ?? 0) > 0 ||
+        init.activeProject.id !== 'proj_sample_living_01';
+      if (forceHome || !hasExistingActivity) {
+        setLandingOpen(true);
       }
     } catch (err) {
       setStorageFatal(err instanceof Error ? err.message : 'Lỗi khởi tạo lưu trữ cục bộ.');
@@ -310,18 +327,6 @@ export const App: React.FC = () => {
     return () => window.removeEventListener('mousedown', onDown);
   }, [moreMenuOpen]);
 
-  // Warn before unload if unsaved/error
-  useEffect(() => {
-    const onBeforeUnload = (e: BeforeUnloadEvent) => {
-      if (saveStatus === 'saving' || saveStatus === 'unsaved' || saveStatus === 'error') {
-        e.preventDefault();
-        e.returnValue = '';
-      }
-    };
-    window.addEventListener('beforeunload', onBeforeUnload);
-    return () => window.removeEventListener('beforeunload', onBeforeUnload);
-  }, [saveStatus]);
-
   const activeProject = useMemo(
     () => projects.find((p) => p.id === activeProjectId) ?? projects[0] ?? null,
     [projects, activeProjectId]
@@ -329,6 +334,11 @@ export const App: React.FC = () => {
 
   const language: Language = meta?.language ?? 'vi';
   const dict = useMemo(() => getDict(language), [language]);
+  const { statuses, persistProject, persistView, clearStatus, publish, getStatus, cancelDelayedWrite } =
+    useProjectPersistence(meta?.autoFolderSync ? syncFolderHandle : null, (message, conflict) => {
+      showToast(conflict ? dict.saveConflict : message || dict.saveLocalError, true);
+    });
+  const saveStatus = statuses[activeProject?.id ?? ''] ?? 'saved';
   const darkTheme = activeProject ? isDarkColor(activeProject.appearance.background) : false;
 
   useEffect(() => {
@@ -381,6 +391,8 @@ export const App: React.FC = () => {
   );
 
   const blockingModalOpen =
+    landingOpen ||
+    onboardingOpen ||
     projectHubOpen ||
     exportOpen ||
     backupOpen ||
@@ -389,57 +401,6 @@ export const App: React.FC = () => {
     Boolean(lightboxCardId);
 
   const anyModalOpen = arrangeOpen || blockingModalOpen;
-
-  // Persistence helper: immediate or debounced per project
-  const persistProject = useCallback(
-    (project: Project, debounceMs = 0) => {
-      const existingTimer = saveTimersRef.current.get(project.id);
-      if (existingTimer) window.clearTimeout(existingTimer);
-
-      const doWrite = async () => {
-        saveTimersRef.current.delete(project.id);
-        setSaveStatus('saving');
-        try {
-          await saveProject(project);
-          setSaveStatus('saved');
-
-          // Debounced background .mosa folder mirror if user linked a local directory
-          const handle = syncFolderRef.current;
-          if (handle && metaRef.current?.autoFolderSync) {
-            const prevSyncTimer = folderSyncTimersRef.current.get(project.id);
-            if (prevSyncTimer) window.clearTimeout(prevSyncTimer);
-            const syncTimer = window.setTimeout(async () => {
-              folderSyncTimersRef.current.delete(project.id);
-              try {
-                const granted = await checkDirectoryPermission(handle, false);
-                if (granted) {
-                  await syncProjectToDirectory(handle, project);
-                }
-              } catch {
-                // Silent background retry next edit
-              }
-            }, 2400);
-            folderSyncTimersRef.current.set(project.id, syncTimer);
-          }
-        } catch (err) {
-          setSaveStatus('error');
-          showToast(
-            err instanceof Error ? err.message : dict.saveLocalError,
-            true
-          );
-        }
-      };
-
-      if (debounceMs > 0) {
-        setSaveStatus('unsaved');
-        const id = window.setTimeout(() => void doWrite(), debounceMs);
-        saveTimersRef.current.set(project.id, id);
-      } else {
-        void doWrite();
-      }
-    },
-    [showToast]
-  );
 
   const getHistoryStack = useCallback((projectId: string): ProjectHistoryStack => {
     let stack = historyMapRef.current.get(projectId);
@@ -458,10 +419,10 @@ export const App: React.FC = () => {
     (
       targetProjectId: string,
       updater: (prev: Project) => Project,
-      opts?: { recordUndo?: boolean; debounceMs?: number }
+      opts?: { recordUndo?: boolean; debounceMs?: number; clipId?: string }
     ) => {
       const prevProject = projectsRef.current.find((p) => p.id === targetProjectId);
-      if (!prevProject) return;
+      if (!prevProject) return Promise.resolve(false);
 
       if (opts?.recordUndo) {
         const nextStack = pushHistory(getHistoryStack(targetProjectId), prevProject);
@@ -477,7 +438,7 @@ export const App: React.FC = () => {
       const nextList = projectsRef.current.map((p) => (p.id === targetProjectId ? nextProject : p));
       projectsRef.current = nextList;
       setProjects(nextList);
-      persistProject(nextProject, opts?.debounceMs ?? 0);
+      return persistProject(nextProject, opts);
     },
     [getHistoryStack, persistProject]
   );
@@ -493,9 +454,10 @@ export const App: React.FC = () => {
     if (!res) return;
     historyMapRef.current.set(activeProject.id, res.stack);
     bumpHistoryVersion((v) => v + 1);
-    setProjects((list) => list.map((p) => (p.id === activeProject.id ? res.project : p)));
+    projectsRef.current = projectsRef.current.map((p) => (p.id === activeProject.id ? res.project : p));
+    setProjects(projectsRef.current);
     setSelectedIds([]);
-    persistProject(res.project, 0);
+    void persistProject(res.project);
   }, [activeProject, getHistoryStack, persistProject]);
 
   const handleRedo = useCallback(() => {
@@ -504,9 +466,10 @@ export const App: React.FC = () => {
     if (!res) return;
     historyMapRef.current.set(activeProject.id, res.stack);
     bumpHistoryVersion((v) => v + 1);
-    setProjects((list) => list.map((p) => (p.id === activeProject.id ? res.project : p)));
+    projectsRef.current = projectsRef.current.map((p) => (p.id === activeProject.id ? res.project : p));
+    setProjects(projectsRef.current);
     setSelectedIds([]);
-    persistProject(res.project, 0);
+    void persistProject(res.project);
   }, [activeProject, getHistoryStack, persistProject]);
 
   // Viewport controls (stored outside content Undo)
@@ -514,15 +477,14 @@ export const App: React.FC = () => {
     (nextView: ProjectView, commit = false) => {
       const pid = activeProjectIdRef.current;
       if (!pid) return;
-      setProjects((list) =>
-        list.map((p) => (p.id === pid ? { ...p, view: nextView } : p))
-      );
-      if (commit) {
-        const cur = projectsRef.current.find((p) => p.id === pid);
-        if (cur) persistProject({ ...cur, view: nextView }, 380);
-      }
+      const project = projectsRef.current.find((p) => p.id === pid);
+      if (!project) return;
+      const updated = { ...project, view: nextView };
+      projectsRef.current = projectsRef.current.map((p) => (p.id === pid ? updated : p));
+      setProjects(projectsRef.current);
+      if (commit) persistView(updated);
     },
-    [persistProject]
+    [persistView]
   );
 
   const getViewportCenterWorld = useCallback((): Point => {
@@ -547,6 +509,15 @@ export const App: React.FC = () => {
     handleViewChange(nextView, true);
   }, [activeProject, arrangeOpen, arrangePreviewCards, handleViewChange, viewportSize.height, viewportSize.width]);
 
+  const handleFitSelection = useCallback(() => {
+    if (!activeProject || selectedCards.length === 0) return;
+    const ids = new Set(selectedIds);
+    const cards = (arrangePreviewCards ?? activeProject.cards).filter((card) => !card.inbox && ids.has(card.id));
+    if (viewportSize.width <= 720 && singleSelectedCard) setInspectorHiddenForCard(singleSelectedCard.id);
+    handleViewChange(fitWorkspaceView(cards, viewportSize.width, viewportSize.height, false,
+      arrangeOpen || selectedCards.length === 1 ? 360 : 0), true);
+  }, [activeProject, arrangeOpen, arrangePreviewCards, handleViewChange, selectedCards.length, selectedIds, singleSelectedCard, viewportSize]);
+
   const handleZoomStep = useCallback(
     (factor: number) => {
       if (!activeProject) return;
@@ -570,6 +541,7 @@ export const App: React.FC = () => {
   // Project Management
   const handleSelectProject = useCallback(
     (id: string) => {
+      activeProjectIdRef.current = id;
       setActiveProjectId(id);
       setSelectedIds([]);
       setEditingCardId(null);
@@ -586,11 +558,13 @@ export const App: React.FC = () => {
   const handleCreateProject = useCallback(
     (name: string) => {
       const created = createEmptyProject(name);
-      setProjects((list) => [created, ...list]);
+      projectsRef.current = [created, ...projectsRef.current];
+      setProjects(projectsRef.current);
+      activeProjectIdRef.current = created.id;
       setActiveProjectId(created.id);
       setSelectedIds([]);
       setEditingCardId(null);
-      persistProject(created, 0);
+      void persistProject(created);
       if (meta) {
         const nextMeta: WorkspaceMeta = { ...meta, activeProjectId: created.id };
         setMeta(nextMeta);
@@ -610,15 +584,62 @@ export const App: React.FC = () => {
   const handleDeleteProject = useCallback(
     async (id: string) => {
       if (projectsRef.current.length <= 1) return;
-      await deleteProjectById(id);
+      const project = projectsRef.current.find((p) => p.id === id);
+      if (!project) return;
+      cancelDelayedWrite(id);
+      try {
+        await deleteProject(project);
+      } catch (error) {
+        const conflict = error instanceof ProjectConflictError;
+        publish(id, conflict ? 'conflict' : 'error');
+        showToast(conflict ? dict.saveConflict : dict.saveLocalError, true);
+        return;
+      }
+      clearStatus(id);
       const remaining = projectsRef.current.filter((p) => p.id !== id);
+      projectsRef.current = remaining;
       setProjects(remaining);
       if (activeProjectIdRef.current === id && remaining[0]) {
         handleSelectProject(remaining[0].id);
       }
     },
-    [handleSelectProject]
+    [cancelDelayedWrite, clearStatus, dict, handleSelectProject, publish, showToast]
   );
+
+  const handleResolveConflict = useCallback(async () => {
+    const id = activeProjectIdRef.current;
+    const project = projectsRef.current.find((p) => p.id === id);
+    if (!project || resolvingConflict) return;
+    setResolvingConflict(true);
+    try {
+      const draft: Project = {
+        ...project,
+        id: createId('proj'),
+        revision: undefined,
+        name: `${project.name} (${dict.conflictDraftSuffix})`,
+        updatedAt: new Date().toISOString(),
+      };
+      await saveProject(draft);
+      const latest = await reloadProjectForEditing(id);
+      if (projectsRef.current.find((p) => p.id === id) !== project) {
+        projectsRef.current = [draft, ...projectsRef.current];
+        setProjects(projectsRef.current);
+        showToast(dict.conflictEditedDuringRecovery, true);
+        return;
+      }
+      projectsRef.current = [draft, ...projectsRef.current.flatMap((p) => p.id === id ? (latest ? [latest] : []) : [p])];
+      setProjects(projectsRef.current);
+      historyMapRef.current.delete(id);
+      clearStatus(id);
+      if (activeProjectIdRef.current === id) handleSelectProject(latest?.id ?? draft.id);
+      showToast(dict.conflictDraftSaved(draft.name));
+      window.dispatchEvent(new Event('mosa-clipper-retry'));
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : dict.saveLocalError, true);
+    } finally {
+      setResolvingConflict(false);
+    }
+  }, [clearStatus, dict, handleSelectProject, resolvingConflict, showToast]);
 
   const handleChangeLanguage = useCallback(
     (lang: Language) => {
@@ -666,9 +687,10 @@ export const App: React.FC = () => {
         if (!coverDataUrl) return;
         const target = projectsRef.current.find((p) => p.id === cur.id);
         if (!target) return;
-        const updated = { ...target, coverDataUrl };
-        setProjects((list) => list.map((p) => (p.id === cur.id ? updated : p)));
-        void saveProject(updated);
+        if (target.cards !== cur.cards) return;
+        projectsRef.current = projectsRef.current.map((p) => (p.id === cur.id ? { ...target, coverDataUrl } : p));
+        setProjects(projectsRef.current);
+        void saveProjectCover(target, coverDataUrl).catch(() => undefined);
       });
     }
   }, []);
@@ -679,12 +701,96 @@ export const App: React.FC = () => {
       const nextList = [created, ...projectsRef.current];
       projectsRef.current = nextList;
       setProjects(nextList);
+      activeProjectIdRef.current = created.id;
       setActiveProjectId(created.id);
       setSelectedIds([]);
       setEditingCardId(null);
-      persistProject(created, 0);
+      void persistProject(created);
       if (meta) {
         const nextMeta: WorkspaceMeta = { ...meta, activeProjectId: created.id };
+        setMeta(nextMeta);
+        void saveWorkspaceMeta(nextMeta);
+      }
+    },
+    [dict, meta, persistProject]
+  );
+
+  const clearLandingUrlFlag = () => {
+    if (window.location.search.includes('home=1') || window.location.hash === '#home') {
+      window.history.replaceState(null, '', window.location.pathname);
+    }
+  };
+
+  const handleEnterCanvasDirectly = useCallback(() => {
+    clearLandingUrlFlag();
+    setLandingOpen(false);
+    setOnboardingOpen(false);
+    if (meta && !meta.onboardingCompleted) {
+      const nextMeta: WorkspaceMeta = { ...meta, onboardingCompleted: true };
+      setMeta(nextMeta);
+      void saveWorkspaceMeta(nextMeta);
+    }
+  }, [meta]);
+
+  const handleCompleteOnboarding = useCallback(
+    (result: OnboardingResult) => {
+      const targetBg = result.theme === 'dark' ? DEFAULT_DARK_BG : DEFAULT_LIGHT_BG;
+      const current = projectsRef.current.find((p) => p.id === activeProjectIdRef.current);
+
+      let nextActiveId = activeProjectIdRef.current;
+
+      if (
+        result.templateId === 'wabi-sabi' &&
+        current &&
+        current.id === 'proj_sample_living_01'
+      ) {
+        const boardCards = current.cards.filter((c) => !c.inbox);
+        const fitted = fitWorkspaceView(boardCards, window.innerWidth, window.innerHeight);
+        const updated: Project = {
+          ...current,
+          name: result.projectName,
+          appearance: { ...current.appearance, background: targetBg },
+          view: fitted,
+          updatedAt: new Date().toISOString(),
+        };
+        const nextList = projectsRef.current.map((p) => (p.id === current.id ? updated : p));
+        projectsRef.current = nextList;
+        setProjects(nextList);
+        void persistProject(updated);
+      } else {
+        const created = createProjectFromTemplate(result.templateId, result.projectName, dict);
+        const boardCards = created.cards.filter((c) => !c.inbox);
+        const fitted =
+          boardCards.length > 0
+            ? fitWorkspaceView(boardCards, window.innerWidth, window.innerHeight)
+            : created.view;
+        const configured: Project = {
+          ...created,
+          appearance: { ...created.appearance, background: targetBg },
+          view: fitted,
+        };
+        const nextList = [configured, ...projectsRef.current];
+        projectsRef.current = nextList;
+        setProjects(nextList);
+        nextActiveId = configured.id;
+        activeProjectIdRef.current = configured.id;
+        setActiveProjectId(configured.id);
+        void persistProject(configured);
+      }
+
+      clearLandingUrlFlag();
+      setSelectedIds([]);
+      setEditingCardId(null);
+      setOnboardingOpen(false);
+      setLandingOpen(false);
+
+      if (meta) {
+        const nextMeta: WorkspaceMeta = {
+          ...meta,
+          activeProjectId: nextActiveId,
+          onboardingCompleted: true,
+          userDiscipline: result.discipline,
+        };
         setMeta(nextMeta);
         void saveWorkspaceMeta(nextMeta);
       }
@@ -746,29 +852,32 @@ export const App: React.FC = () => {
     }
   }, [dict, handleSelectProject, showToast]);
 
-  // Listen to Chrome / Edge Mosa Web Clipper extension bridge (localhost only)
   const handleWebClipReceived = useCallback(
-    (clipCard: Card) => {
-      const targetId = activeProjectIdRef.current;
-      if (!targetId) return;
-      mutateProject(
-        targetId,
-        (p) => ({
+    async (clipCard: Card, targetId: string, clipId: string) => {
+      const project = projectsRef.current.find((p) => p.id === targetId);
+      if (!project || getStatus(targetId) === 'conflict') return false;
+      const alreadyInDraft = project.cards.some((c) => c.id === clipCard.id) ||
+        project.trash.some(({ card }) => card.id === clipCard.id);
+      const saved = alreadyInDraft
+        ? await persistProject(project, { clipId })
+        : await mutateProject(targetId, (p) => ({
           ...p,
           cards: [...p.cards, { ...clipCard, z: getNextZ(p.cards) }],
-        }),
-        { recordUndo: true }
-      );
-      showToast(dict.clipperReceivedToast(clipCard.title || 'Web Clip'));
+        }), { recordUndo: true, clipId });
+      if (saved) showToast(dict.clipperReceivedToast(clipCard.title, project.name));
+      return saved;
     },
-    [dict, mutateProject, showToast]
+    [dict, getStatus, mutateProject, persistProject, showToast]
   );
 
-  const { bridgeAvailable: clipperBridgeReady } = useClipperBridge(
-    !loading && Boolean(activeProjectId),
+  const { bridgeAvailable: clipperBridgeReady, localPairingAvailable } = useClipperBridge({
+    enabled: !loading && Boolean(activeProjectId),
     language,
-    handleWebClipReceived
-  );
+    destination: activeProject && saveStatus !== 'conflict'
+      ? { projectId: activeProject.id, projectName: activeProject.name } : undefined,
+    canReceive: (id) => getStatus(id) !== 'conflict' && projectsRef.current.some((p) => p.id === id),
+    onCommit: handleWebClipReceived,
+  });
 
   const handleChangeAppearance = useCallback(
     (appearance: ProjectAppearance) => {
@@ -2041,6 +2150,7 @@ export const App: React.FC = () => {
     modalOpen: blockingModalOpen,
     onViewChange: handleViewChange,
     onSelectChange: (ids) => {
+      setInspectorHiddenForCard(null);
       setSelectedIds(ids);
       if (editingCardId && !ids.includes(editingCardId)) setEditingCardId(null);
     },
@@ -2525,7 +2635,9 @@ export const App: React.FC = () => {
   }
 
   const saveLabel =
-    saveStatus === 'saved'
+    saveStatus === 'conflict'
+      ? dict.saveConflict
+      : saveStatus === 'saved'
       ? dict.saveSaved
       : saveStatus === 'saving'
         ? dict.saveSaving
@@ -2728,11 +2840,11 @@ export const App: React.FC = () => {
                     {saveStatus === 'saved' && <Check size={13} aria-hidden="true" />}
                     {saveStatus === 'saving' && <LoaderCircle size={13} className="spin" aria-hidden="true" />}
                     {saveStatus === 'unsaved' && <CircleDashed size={13} aria-hidden="true" />}
-                    {saveStatus === 'error' && <CircleAlert size={13} aria-hidden="true" />}
+                    {(saveStatus === 'error' || saveStatus === 'conflict') && <CircleAlert size={13} aria-hidden="true" />}
                     <span className="truncate">{saveLabel}</span>
                   </span>
                   {saveStatus === 'error' && (
-                    <button type="button" className="save-retry" onClick={() => persistProject(activeProject, 0)}>
+                    <button type="button" className="save-retry" onClick={() => void persistProject(activeProject)}>
                       {dict.retry}
                     </button>
                   )}
@@ -2753,6 +2865,7 @@ export const App: React.FC = () => {
                 open={inboxOpen}
                 inboxCards={inboxCards}
                 clipperBridgeReady={clipperBridgeReady}
+                localPairingAvailable={localPairingAvailable}
                 dict={dict}
                 onToggle={() =>
                   setInboxOpen((v) => {
@@ -2818,6 +2931,26 @@ export const App: React.FC = () => {
                 <Presentation size={17} />
               </button>
 
+              <button
+                type="button"
+                className="btn topbar-export-btn"
+                title={dict.exportBoard}
+                aria-label={dict.exportBoard}
+                onClick={() => {
+                  lastPreviewFitKeyRef.current = null;
+                  setArrangePreviewCards(null);
+                  setArrangeOpen(false);
+                  setMoreMenuOpen(false);
+                  setSettingsOpen(false);
+                  setInboxOpen(false);
+                  setContextMenu(null);
+                  setExportOpen(true);
+                }}
+              >
+                <Download size={16} />
+                <span className="btn-label-md">{dict.exportBoard}</span>
+              </button>
+
               <SettingsPopover
                 open={settingsOpen}
                 onOpenChange={(next) => {
@@ -2840,7 +2973,7 @@ export const App: React.FC = () => {
                 onOpenStorageHub={() => setBackupOpen(true)}
               />
 
-              {/* Secondary Menu: Export, Backup, Trash */}
+              {/* Secondary Menu: Backup and Trash */}
               <div ref={moreMenuRef} className="popover-anchor">
                 <button
                   type="button"
@@ -2872,12 +3005,13 @@ export const App: React.FC = () => {
                       className="popover-action-btn"
                       onClick={() => {
                         setMoreMenuOpen(false);
-                        setExportOpen(true);
+                        setLandingOpen(true);
                       }}
                     >
-                      <Download size={15} />
-                      <span>{dict.exportPng}</span>
+                      <Compass size={15} />
+                      <span>{dict.openLandingPageMenu}</span>
                     </button>
+                    <div className="popover-divider" />
                     <button
                       type="button"
                       className="popover-action-btn"
@@ -2909,6 +3043,17 @@ export const App: React.FC = () => {
             </div>
           </header>
 
+          {saveStatus === 'conflict' && (
+            <div className="save-conflict-banner" role="status">
+              <CircleAlert size={16} aria-hidden="true" />
+              <span>{dict.saveConflictDetail}</span>
+              <button className="btn-xs btn-primary" type="button" disabled={resolvingConflict}
+                onClick={() => void handleResolveConflict()}>
+                {resolvingConflict ? dict.saveSaving : dict.resolveSaveConflict}
+              </button>
+            </div>
+          )}
+
           {/* Multi-select action bar */}
           <SelectionOverlay
             selectedCards={selectedCards}
@@ -2928,7 +3073,8 @@ export const App: React.FC = () => {
           />
 
           {/* Right Inspector Panel when 1 card selected */}
-          {singleSelectedCard && !inboxOpen && !arrangeOpen && !settingsOpen && !moreMenuOpen && (
+          {singleSelectedCard && singleSelectedCard.id !== inspectorHiddenForCard &&
+            !inboxOpen && !arrangeOpen && !settingsOpen && !moreMenuOpen && (
             <InspectorPanel
               card={singleSelectedCard}
               dict={dict}
@@ -3104,6 +3250,18 @@ export const App: React.FC = () => {
                 <Plus size={15} />
               </button>
               <span className="toolbar-sep" aria-hidden="true" />
+              {selectedCards.length > 0 && (
+                <button type="button" className="icon-btn-sm" title={dict.fitSelection}
+                  aria-label={dict.fitSelection} onClick={handleFitSelection}>
+                  <Focus size={16} />
+                </button>
+              )}
+              {singleSelectedCard && singleSelectedCard.id === inspectorHiddenForCard && (
+                <button type="button" className="icon-btn-sm" title={dict.showCardInspector}
+                  aria-label={dict.showCardInspector} onClick={() => setInspectorHiddenForCard(null)}>
+                  <PanelRightOpen size={16} />
+                </button>
+              )}
               <button
                 type="button"
                 className="icon-btn-sm"
@@ -3182,7 +3340,8 @@ export const App: React.FC = () => {
             dict={dict}
             onClose={() => setBackupOpen(false)}
             onImportedProject={(imported) => {
-              setProjects((list) => [imported, ...list]);
+              projectsRef.current = [imported, ...projectsRef.current];
+              setProjects(projectsRef.current);
               handleSelectProject(imported.id);
               showToast(dict.projectImportedToast(imported.name));
             }}
@@ -3206,6 +3365,32 @@ export const App: React.FC = () => {
             onDeleteProject={(id) => void handleDeleteProject(id)}
             onExportMosaFile={(p) => void handleExportMosaFileQuick(p)}
             onOpenMosaFile={() => void handleOpenMosaFileQuick()}
+          />
+        )}
+
+        {landingOpen && (
+          <LandingPage
+            dict={dict}
+            language={language}
+            hasExistingWorkspace={
+              Boolean(meta?.onboardingCompleted) ||
+              projects.length > 1 ||
+              (activeProject.revision ?? 0) > 0 ||
+              activeProject.id !== 'proj_sample_living_01'
+            }
+            onChangeLanguage={handleChangeLanguage}
+            onStartOnboarding={() => setOnboardingOpen(true)}
+            onEnterCanvasDirectly={handleEnterCanvasDirectly}
+          />
+        )}
+
+        {onboardingOpen && (
+          <OnboardingModal
+            open={onboardingOpen}
+            dict={dict}
+            language={language}
+            onSkip={handleEnterCanvasDirectly}
+            onComplete={handleCompleteOnboarding}
           />
         )}
       </Suspense>

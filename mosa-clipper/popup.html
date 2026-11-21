@@ -24,6 +24,7 @@
         </div>
       </div>
     </header>
+    <p id="destinationText" class="destination-text" aria-live="polite"></p>
 
     <!-- 1-Click Tactile 2x3 Category Selector (Zero native select, zero clipping!) -->
     <section class="section">
@@ -83,6 +84,16 @@
 
     <!-- Live Feedback Banner (Hidden when idle) -->
     <div id="feedbackBar" class="feedback-bar" hidden></div>
+
+    <details class="connection-settings">
+      <summary id="connectionLabel">Connect local Mosa</summary>
+      <form id="connectionForm">
+        <label><span id="siteLabel">Custom Mosa URL (optional)</span><input id="siteUrl" type="url" /></label>
+        <label><span id="codeLabel">Local connection code</span><input id="connectionCode" type="password" autocomplete="off" /></label>
+        <label class="connection-clear" id="clearRow" hidden><input id="clearCode" type="checkbox" /><span id="clearLabel">Clear saved code</span></label>
+        <button id="saveConnection" class="btn-sync" type="submit">Save</button>
+      </form>
+    </details>
 
     <!-- Crisp Single-Line Shortcut Footer -->
     <footer class="foot" id="footBar">

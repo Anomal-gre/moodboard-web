@@ -120,6 +120,7 @@ export interface StudioProfile {
 
 export interface Project {
   id: string;
+  revision?: number;
   name: string;
   description: string;
   status?: ProjectStatus;
@@ -134,6 +135,8 @@ export interface Project {
   updatedAt: string;
 }
 
+export type UserDiscipline = 'interior' | 'ffe' | 'branding' | 'freeform';
+
 export interface WorkspaceMeta {
   schemaVersion: 1;
   language: 'vi' | 'en';
@@ -141,6 +144,8 @@ export interface WorkspaceMeta {
   createdAt: string;
   studioProfile?: StudioProfile;
   autoFolderSync?: boolean;
+  onboardingCompleted?: boolean;
+  userDiscipline?: UserDiscipline;
 }
 
 export type ArrangeMode = 'bento' | 'freeform' | 'zones' | 'grid';
@@ -175,7 +180,7 @@ export interface ClassifySuggestion {
   error?: string;
 }
 
-export type SaveStatus = 'saved' | 'saving' | 'unsaved' | 'error';
+export type SaveStatus = 'saved' | 'saving' | 'unsaved' | 'error' | 'conflict';
 
 export const CATEGORY_ORDER: Category[] = [
   'reference',

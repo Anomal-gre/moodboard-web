@@ -2,7 +2,6 @@ import type { AssetBytesRecord, AssetMeta, Project, WorkspaceMeta } from '../dom
 import { createSampleProject, SAMPLE_ASSETS } from '../domain/project';
 import { createId, normalizeDashes, sanitizeCard } from '../domain/validate';
 import {
-  idbDelete,
   idbGet,
   idbGetAll,
   idbPut,
@@ -10,11 +9,11 @@ import {
   STORES,
 } from './indexedDb';
 import { processUploadedImage } from './assets';
+import { createProjectWriter } from './projectWrites';
 
 const WORKSPACE_META_KEY = 'workspace';
 
-// Per-project write queue so slow transactions never overwrite newer commits
-const projectSaveQueues = new Map<string, Promise<void>>();
+const projectWriter = createProjectWriter();
 
 // In-memory object URL cache for thumbnails/full images (revoked on cleanup)
 const thumbUrlCache = new Map<string, string>();
@@ -38,12 +37,16 @@ function cleanProjectDashes(p: Project): Project {
   };
 }
 
+function normalizeLoadedProject(project: Project): Project {
+  return cleanProjectDashes({ ...project, revision: project.revision ?? 0 });
+}
+
 export async function initWorkspace(): Promise<InitializedWorkspace> {
   const existingMeta = await idbGet<WorkspaceMeta>(STORES.META, WORKSPACE_META_KEY);
   const existingProjects = await idbGetAll<Project>(STORES.PROJECTS);
 
   if (!existingMeta && existingProjects.length === 0) {
-    const sampleProject = cleanProjectDashes(createSampleProject());
+    const sampleProject = normalizeLoadedProject(createSampleProject());
     const meta: WorkspaceMeta = {
       schemaVersion: 1,
       language: 'vi',
@@ -52,26 +55,31 @@ export async function initWorkspace(): Promise<InitializedWorkspace> {
     };
 
     await idbRunTransaction([STORES.META, STORES.PROJECTS, STORES.ASSET_META], 'readwrite', (tx) => {
-      tx.objectStore(STORES.META).put(meta, WORKSPACE_META_KEY);
-      tx.objectStore(STORES.PROJECTS).put(sampleProject);
-      for (const s of SAMPLE_ASSETS) {
-        const assetMeta: AssetMeta = {
-          id: s.id,
-          fileName: s.fileName,
-          mime: 'image/jpeg',
-          size: 0,
-          width: s.width,
-          height: s.height,
-          samplePath: s.samplePath,
-        };
-        tx.objectStore(STORES.ASSET_META).put(assetMeta);
-      }
+      const store = tx.objectStore(STORES.PROJECTS);
+      const count = store.count();
+      count.onsuccess = () => {
+        if (count.result > 0) return;
+        tx.objectStore(STORES.META).put(meta, WORKSPACE_META_KEY);
+        store.add(sampleProject);
+        for (const s of SAMPLE_ASSETS) {
+          const assetMeta: AssetMeta = {
+            id: s.id,
+            fileName: s.fileName,
+            mime: 'image/jpeg',
+            size: 0,
+            width: s.width,
+            height: s.height,
+            samplePath: s.samplePath,
+          };
+          tx.objectStore(STORES.ASSET_META).put(assetMeta);
+        }
+      };
     });
 
-    return { meta, projects: [sampleProject], activeProject: sampleProject };
+    return initWorkspace();
   }
 
-  let projects = existingProjects.map(cleanProjectDashes);
+  const projects = existingProjects.map(normalizeLoadedProject);
   let meta: WorkspaceMeta = existingMeta ?? {
     schemaVersion: 1,
     language: 'vi',
@@ -80,11 +88,17 @@ export async function initWorkspace(): Promise<InitializedWorkspace> {
   };
 
   if (projects.length === 0) {
-    const sampleProject = cleanProjectDashes(createSampleProject());
-    projects = [sampleProject];
-    meta = { ...meta, activeProjectId: sampleProject.id };
-    await idbPut(STORES.PROJECTS, sampleProject);
-    await idbPut(STORES.META, meta, WORKSPACE_META_KEY);
+    const sampleProject = normalizeLoadedProject(createSampleProject());
+    await idbRunTransaction([STORES.PROJECTS, STORES.META], 'readwrite', (tx) => {
+      const store = tx.objectStore(STORES.PROJECTS);
+      const count = store.count();
+      count.onsuccess = () => {
+        if (count.result > 0) return;
+        store.add(sampleProject);
+        tx.objectStore(STORES.META).put({ ...meta, activeProjectId: sampleProject.id }, WORKSPACE_META_KEY);
+      };
+    });
+    return initWorkspace();
   }
 
   projects.sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
@@ -104,28 +118,33 @@ export async function saveWorkspaceMeta(meta: WorkspaceMeta): Promise<void> {
 
 export async function loadProject(projectId: string): Promise<Project | undefined> {
   const p = await idbGet<Project>(STORES.PROJECTS, projectId);
-  return p ? cleanProjectDashes(p) : undefined;
+  return p ? normalizeLoadedProject(p) : undefined;
 }
 
 export async function listProjects(): Promise<Project[]> {
   const list = await idbGetAll<Project>(STORES.PROJECTS);
-  return list.map(cleanProjectDashes).sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
+  return list.map(normalizeLoadedProject).sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
 }
 
-export function saveProject(project: Project): Promise<void> {
-  const cleaned = cleanProjectDashes(project);
-  const prev = projectSaveQueues.get(cleaned.id) ?? Promise.resolve();
-  const next = prev
-    .catch(() => undefined)
-    .then(async () => {
-      await idbPut(STORES.PROJECTS, cleaned);
-    });
-  projectSaveQueues.set(cleaned.id, next);
-  return next;
+export function saveProject(project: Project, clipId?: string): Promise<void> {
+  return projectWriter.save(cleanProjectDashes(project), clipId);
 }
 
-export async function deleteProjectById(projectId: string): Promise<void> {
-  await idbDelete(STORES.PROJECTS, projectId);
+export function saveProjectView(project: Project): Promise<void> {
+  return projectWriter.updateViewOrCover(project, { view: project.view });
+}
+
+export function saveProjectCover(project: Project, coverDataUrl: string): Promise<void> {
+  return projectWriter.updateViewOrCover(project, { coverDataUrl });
+}
+
+export function deleteProject(project: Project): Promise<void> {
+  return projectWriter.remove(project);
+}
+
+export async function reloadProjectForEditing(id: string): Promise<Project | undefined> {
+  const project = await projectWriter.reload(id);
+  return project ? normalizeLoadedProject(project) : undefined;
 }
 
 export async function duplicateProject(
@@ -155,6 +174,7 @@ export async function duplicateProject(
   const cloned: Project = {
     ...source,
     id: createId('proj'),
+    revision: undefined,
     name: `${source.name} ${copySuffix}`.trim(),
     status: 'draft',
     pinned: false,

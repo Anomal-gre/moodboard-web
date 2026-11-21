@@ -14,6 +14,7 @@ Triết lý cốt lõi: **Gom trước, xếp sau, truy lại nguồn, chỉnh t
 ```bash
 npm ci
 npm run dev       # Chạy môi trường phát triển tại http://127.0.0.1:4313
+npm test          # Kiểm thử lưu, sao lưu, gửi lại clip và bridge cục bộ
 npm run build     # Kiểm tra TypeScript (tsc -b) và build bản production vào dist/
 npm run preview   # Xem thử bản build production tại http://127.0.0.1:4313
 ```
@@ -41,16 +42,17 @@ npm run preview   # Xem thử bản build production tại http://127.0.0.1:4313
 * **Trình bày, Xuất PNG & Sao lưu dự án (M6):**
   * Chế độ **Trình bày** ẩn toàn bộ thanh công cụ, cho pan/zoom tự do và `Esc` để quay lại góc nhìn cũ.
   * Xuất **PNG** (1× hoặc 2×) bằng Canvas 2D cho toàn bảng hoặc vùng chọn, xử lý tọa độ âm, kiểm tra giới hạn an toàn trình duyệt (≤ 12.000 px mỗi cạnh và ≤ 36 triệu pixel), cảnh báo ảnh thiếu (cho chọn quay lại sửa hoặc xuất ô giữ chỗ), kèm tùy chọn xuất danh sách nguồn **`-sources.json`**.
-  * Xuất / Nhập bản sao di động **`.moodboard.json`** (đóng gói metadata + ảnh base64, kiểm tra giới hạn 100 MB, xác thực cấu trúc và nhập thành dự án riêng độc lập trong một transaction nguyên tử).
+  * Mở **Xuất** cạnh **Trình bày** và dùng **Vừa vùng chọn** cạnh **Vừa bảng** để đọc một cụm thẻ.
+  * Xuất / nhập bản sao **`.mosa`** hoặc **`.moodboard.json`** gồm thông tin dự án, liên kết giữa thẻ, ảnh và tệp thiết kế đính kèm. Giới hạn xuất và nhập là 100 MB. Mosa mở bản sao dưới dạng dự án riêng và ghi toàn bộ dữ liệu trong một giao dịch.
 
 ---
 
 ## 3. Lưu ý về Lưu trữ, AI cục bộ và Giới hạn trình duyệt
 
-1. **Dữ liệu theo origin trình duyệt:** Toàn bộ dự án và ảnh nằm trong IndexedDB của trình duyệt hiện tại. Xóa dữ liệu trang web sẽ xóa kho này - hãy dùng tính năng **Sao lưu dự án (`.moodboard.json`)** để chuyển máy hoặc lưu dự phòng. Phiên bản MVP ưu tiên chỉnh sửa trên một tab trình duyệt cho mỗi workspace.
+1. **Dữ liệu theo origin trình duyệt.** Dự án và ảnh nằm trong IndexedDB của trình duyệt hiện tại. Dùng bản sao để chuyển máy hoặc lưu dự phòng. Khi hai tab cùng sửa một dự án, tab có bản cũ sẽ báo xung đột. Chọn **Giữ bản nháp và nạp bản mới** để lưu các sửa đổi trong dự án riêng rồi mở bản đã lưu.
 2. **Tải mô hình AI lần đầu:** Lần đầu bấm *Phân loại AI*, trình duyệt cần kết nối mạng để tải tệp mô hình CLIP và runtime WASM từ Hugging Face CDN vào Browser Cache. Sau khi đã cache, các lần phân loại tiếp theo chạy nhanh hơn rõ rệt và hoàn toàn trên máy.
 3. **Giới hạn nguồn web & CORS:** Một số website chặn tải trực tiếp bytes ảnh do CORS hoặc yêu cầu đăng nhập; ứng dụng vẫn giữ card cùng URL gốc ở trạng thái `remote-only` và cung cấp nút **Thay ảnh** mà không làm mất URL nguồn.
-4. **Hành động thuộc bản Desktop (sau MVP):** Lưu đường dẫn tuyệt đối tệp local, ghim cửa sổ luôn nổi trên cùng (Always-on-top) và mở trực tiếp `.dwg / .psd / .ai / .indd` bằng phần mềm cài trên máy thuộc lộ trình bản Desktop (ví dụ Tauri/Rust).
+4. **Mở tệp thiết kế.** Tauri và Mosa chạy cục bộ mở các định dạng thiết kế được hỗ trợ từ bản đính kèm đã lưu. Các định dạng khác dùng chế độ xem trong trình duyệt hoặc tải xuống tùy loại tệp. Gắn lại tệp nếu thẻ cũ chỉ lưu đường dẫn.
 
 ---
 
@@ -59,7 +61,10 @@ npm run preview   # Xem thử bản build production tại http://127.0.0.1:4313
 Repo đã tích hợp sẵn tiện ích Chrome / Edge / Vivaldi (Manifest V3) tại thư mục `mosa-clipper/` và gói tải nhanh `public/downloads/mosa-clipper.zip` (có nút tải trực tiếp trong khay **Chưa sắp xếp (Inbox)** trên bản web).
 
 * **Cách cài đặt:** Mở `chrome://extensions` (hoặc `edge://extensions` / `vivaldi://extensions`) → Bật **Developer mode** → Chọn **Load unpacked** → Chọn thư mục `mosa-clipper/`.
-* **Hoạt động ở cả bản deploy online (GitHub Pages / Vercel) lẫn bản chạy local (`http://127.0.0.1:4313`):** tự nhận tab Mosa đang mở, bỏ qua lỗi CORS, tự nâng cấp ảnh Pinterest lên độ phân giải `/originals/` và giữ hàng chờ offline khi Mosa chưa mở.
+* Clipper tự nhận bản GitHub Pages của dự án và tab local `http://127.0.0.1:4313`. Với Vercel hoặc tên miền riêng, nhập URL đầy đủ của Mosa trong mục kết nối của tiện ích.
+* Nếu Mosa cục bộ mở ở trình duyệt khác, vào **Chưa sắp xếp → Mosa Web Clipper → Lấy mã kết nối trình duyệt khác** rồi dán mã vào phần kết nối của tiện ích. Mã mặc định đổi mỗi lần khởi động máy chủ. Có thể đặt `MOSA_CLIPPER_TOKEN` bằng một mã ngẫu nhiên dài 32–128 ký tự, dùng chữ, số, `_` hoặc `-`, để dùng lại mã giữa các lần chạy.
+* Ảnh đang chờ được lưu ở tiện ích và giữ nguyên dự án đích sau khi đã xác định. Clipper báo đã lưu khi Mosa xác nhận ghi vào IndexedDB. Khi hàng chờ đầy, tiện ích báo lỗi và giữ các ảnh đã xếp hàng.
+* Sau khi cập nhật, reload tiện ích tại thư mục cài đặt hiện tại và tải lại tab Mosa cùng các tab nguồn. `npm run package:clipper` tạo ZIP từ mã nguồn tiện ích. Lệnh build cũng cập nhật gói ZIP.
 
 ---
 
