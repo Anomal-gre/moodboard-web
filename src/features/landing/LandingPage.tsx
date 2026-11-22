@@ -36,6 +36,14 @@ interface LandingPageProps {
 
 const BASE = import.meta.env.BASE_URL || './';
 
+const MOODBOARD_PALETTE = [
+  { hex: '#DED5C5', name: 'Limestone', light: true },
+  { hex: '#C5A47E', name: 'Warm Oak', light: true },
+  { hex: '#8D9A7C', name: 'Muted Sage' },
+  { hex: '#5E594E', name: 'Umber' },
+  { hex: '#2B2A27', name: 'Charcoal' },
+];
+
 type CellState = 'yes' | 'no' | 'partial' | string;
 type ShowcasePresetId = 'interior' | 'materials' | 'editorial';
 
@@ -121,9 +129,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({
 
   const scrollToSection = (id: string) => {
     const el = scrollRootRef.current?.querySelector(`#${id}`);
-    if (el) {
-      el.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    }
+    el?.scrollIntoView({ block: 'start' });
   };
 
   const primaryCtaLabel = hasExistingWorkspace ? dict.landingCtaResume : dict.landingCtaTryNow;
@@ -245,7 +251,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({
           <button
             type="button"
             className="ld-nav-brand"
-            onClick={() => scrollRootRef.current?.scrollTo({ top: 0, behavior: 'smooth' })}
+            onClick={() => scrollRootRef.current?.scrollTo({ top: 0 })}
           >
             <img src={`${BASE}brand/logo.svg`} alt="Mosa" width={24} height={24} />
             <span className="ld-nav-wordmark">Mosa</span>
@@ -274,6 +280,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({
               <button
                 type="button"
                 className={language === 'vi' ? 'is-active' : ''}
+                aria-pressed={language === 'vi'}
                 onClick={() => onChangeLanguage('vi')}
               >
                 VI
@@ -281,6 +288,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({
               <button
                 type="button"
                 className={language === 'en' ? 'is-active' : ''}
+                aria-pressed={language === 'en'}
                 onClick={() => onChangeLanguage('en')}
               >
                 EN
@@ -300,56 +308,67 @@ export const LandingPage: React.FC<LandingPageProps> = ({
         </div>
       </header>
 
-      {/* Airy Apple Editorial Hero */}
+      {/* Hero with a preview assembled from Mosa's sample library */}
       <section className="ld-hero">
-        <div className="ld-hero-aura ld-hero-aura--left" aria-hidden="true" />
-        <div className="ld-hero-aura ld-hero-aura--right" aria-hidden="true" />
         <div className="ld-container ld-hero-inner">
-          <span className="ld-eyebrow-pill ld-hero-enter" style={{ '--d': '0ms' } as React.CSSProperties}>
-            <span className="ld-live-dot" aria-hidden="true" />
-            <span>{dict.landingHeroEyebrow}</span>
-          </span>
-          <h1 className="ld-hero-title">
-            <span className="ld-hero-enter" style={{ '--d': '85ms' } as React.CSSProperties}>
-              {dict.landingHeroTitleLine1}
+          <div className="ld-hero-copy">
+            <span className="ld-eyebrow-pill ld-hero-enter" style={{ '--d': '0ms' } as React.CSSProperties}>
+              <span className="ld-live-dot" aria-hidden="true" />
+              <span>{dict.landingHeroEyebrow}</span>
             </span>
-            <span
-              className="ld-hero-title-accent ld-hero-enter"
-              style={{ '--d': '175ms' } as React.CSSProperties}
-            >
-              {dict.landingHeroTitleLine2}
-            </span>
-          </h1>
-          <p className="ld-hero-subtitle ld-hero-enter" style={{ '--d': '265ms' } as React.CSSProperties}>
-            {dict.landingHeroSubtitle}
-          </p>
+            <h1 className="ld-hero-title">
+              <span className="ld-hero-enter" style={{ '--d': '85ms' } as React.CSSProperties}>
+                {dict.landingHeroTitleLine1}
+              </span>
+              <span
+                className="ld-hero-title-accent ld-hero-enter"
+                style={{ '--d': '175ms' } as React.CSSProperties}
+              >
+                {dict.landingHeroTitleLine2}
+              </span>
+            </h1>
+            <p className="ld-hero-subtitle ld-hero-enter" style={{ '--d': '265ms' } as React.CSSProperties}>
+              {dict.landingHeroSubtitle}
+            </p>
 
-          <div className="ld-hero-ctas ld-hero-enter" style={{ '--d': '350ms' } as React.CSSProperties}>
-            <button type="button" className="ld-btn ld-btn--primary ld-btn--lg" onClick={handlePrimaryCta}>
-              <span>{primaryCtaLabel}</span>
-              <ArrowRight size={17} />
-            </button>
-            <button
-              type="button"
-              className="ld-btn ld-btn--glass ld-btn--lg"
-              onClick={() => scrollToSection('demo')}
-            >
-              <Play size={15} />
-              <span>{dict.landingCtaWatchDemo}</span>
-            </button>
+            <div className="ld-hero-ctas ld-hero-enter" style={{ '--d': '350ms' } as React.CSSProperties}>
+              <button type="button" className="ld-btn ld-btn--primary ld-btn--lg" onClick={handlePrimaryCta}>
+                <span>{primaryCtaLabel}</span>
+                <ArrowRight size={17} />
+              </button>
+              <button
+                type="button"
+                className="ld-btn ld-btn--glass ld-btn--lg"
+                onClick={() => scrollToSection('demo')}
+              >
+                <Play size={15} />
+                <span>{dict.landingCtaWatchDemo}</span>
+              </button>
+            </div>
+
+            <div className="ld-hero-sub-row ld-hero-enter" style={{ '--d': '430ms' } as React.CSSProperties}>
+              <span className="ld-trust-caption">{dict.landingTrustLine}</span>
+              {hasExistingWorkspace ? (
+                <button type="button" className="ld-inline-link" onClick={onStartOnboarding}>
+                  {dict.landingCtaStartWizard}
+                </button>
+              ) : (
+                <button type="button" className="ld-inline-link" onClick={onEnterCanvasDirectly}>
+                  {dict.landingCtaDirectCanvas}
+                </button>
+              )}
+            </div>
           </div>
 
-          <div className="ld-hero-sub-row ld-hero-enter" style={{ '--d': '430ms' } as React.CSSProperties}>
-            <span className="ld-trust-caption">{dict.landingTrustLine}</span>
-            {hasExistingWorkspace ? (
-              <button type="button" className="ld-inline-link" onClick={onStartOnboarding}>
-                {dict.landingCtaStartWizard}
-              </button>
-            ) : (
-              <button type="button" className="ld-inline-link" onClick={onEnterCanvasDirectly}>
-                {dict.landingCtaDirectCanvas}
-              </button>
-            )}
+          <div className="ld-hero-board ld-hero-enter" aria-hidden="true">
+            <img className="ld-hero-board-room" src={`${BASE}samples/living-room.jpg`} alt="" fetchPriority="high" />
+            <img src={`${BASE}samples/armchair.jpg`} alt="" />
+            <img src={`${BASE}samples/material-texture.jpg`} alt="" />
+            <div className="ld-hero-palette">
+              {MOODBOARD_PALETTE.map(({ hex }) => (
+                <span key={hex} style={{ backgroundColor: hex }} />
+              ))}
+            </div>
           </div>
         </div>
       </section>
@@ -437,13 +456,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({
                   </p>
                 </div>
                 <div className="ld-gal-palette-bar">
-                  {[
-                    { hex: '#DED5C5', name: 'Limestone', light: true },
-                    { hex: '#C5A47E', name: 'Warm Oak', light: true },
-                    { hex: '#8D9A7C', name: 'Muted Sage' },
-                    { hex: '#5E594E', name: 'Umber' },
-                    { hex: '#2B2A27', name: 'Charcoal' },
-                  ].map((sw) => (
+                  {MOODBOARD_PALETTE.map((sw) => (
                     <div
                       key={sw.hex}
                       className={`ld-gal-swatch ${sw.light ? 'is-light' : ''}`}
@@ -654,7 +667,14 @@ export const LandingPage: React.FC<LandingPageProps> = ({
             <h2 className="ld-section-title">{dict.landingCompareTitle}</h2>
           </div>
 
-          <div className="ld-compare-wrap ld-reveal" data-reveal="table" style={{ '--rd': '80ms' } as React.CSSProperties}>
+          <div
+            className="ld-compare-wrap ld-reveal"
+            data-reveal="table"
+            role="region"
+            aria-label={dict.landingCompareTitle}
+            tabIndex={0}
+            style={{ '--rd': '80ms' } as React.CSSProperties}
+          >
             <table className="ld-compare-table">
               <thead>
                 <tr>
@@ -758,7 +778,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({
                   </span>
                 </button>
                 {pwa.status === 'manual-hint' && (
-                  <p className="ld-install-hint">{dict.landingInstallPwaManualHint}</p>
+                  <p className="ld-install-hint" role="status">{dict.landingInstallPwaManualHint}</p>
                 )}
               </div>
             </article>
