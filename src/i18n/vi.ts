@@ -481,8 +481,9 @@ export const vi = {
   landingCtaStartWizard: 'Hoặc tạo bảng mới theo lĩnh vực →',
   landingHeroEyebrow: 'Mosa',
   landingHeroTitleLine1: 'Gom cảm hứng.',
-  landingHeroTitleLine2: 'Xếp nên câu chuyện.',
-  landingHeroSubtitle: 'Không gian moodboard nhẹ, mượt và riêng tư cho người sáng tạo.',
+  landingHeroTitleLine2: 'Xếp bảng chuẩn studio.',
+  landingHeroSubtitle:
+    'Không gian moodboard nhẹ, mượt và riêng tư — từ lưu ảnh đến bàn giao khách hàng.',
   landingTrustLine: 'Miễn phí · Không cần tài khoản · Lưu ngay trên máy',
 
   landingDemoEyebrow: '',
@@ -592,7 +593,7 @@ export const vi = {
   landingFooterColCreator: 'Về tác giả',
   landingFooterColMore: 'Dự án khác & Liên hệ',
   landingFooterRepoLink: 'Mã nguồn (GitHub)',
-  landingFooterNote: '© 2026 Tran Gia Bao (Anomal) · Mosa',
+  landingFooterNote: '© 2026 Trần Gia Bảo (Anomal) · Mosa',
 
   // Onboarding Modal (2 steps)
   onboardSkip: 'Bỏ qua',

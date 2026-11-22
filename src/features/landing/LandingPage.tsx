@@ -158,7 +158,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({
       : 4;
 
   const designElementChips = [
-    { label: isVi ? 'Không gian' : 'Space', color: '#007AFF' },
+    { label: isVi ? 'Không gian' : 'Space', color: '#0059C7' },
     { label: isVi ? 'Hình khối' : 'Form', color: '#C5A47E' },
     { label: isVi ? 'Kết cấu' : 'Texture', color: '#8D9A7C' },
     { label: isVi ? 'Màu sắc' : 'Color', color: '#FF9500' },
@@ -499,7 +499,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({
                     <br />
                     Forms.
                   </h3>
-                  <p>Bricolage Grotesque · Inter · Editorial Grid 0°</p>
+                  <p>Bricolage Grotesque · Inter · 0° Grid</p>
                 </div>
                 <figure className="ld-gal-photo ld-gal-ed-chair">
                   <img src={`${BASE}samples/armchair.jpg`} alt="" loading="lazy" />
@@ -546,9 +546,10 @@ export const LandingPage: React.FC<LandingPageProps> = ({
               style={{ '--rd': '0ms' } as React.CSSProperties}
             >
               <div className="ld-bento-visual-copy">
-                <div className="ld-bento-icon-wrap">
-                  <LayoutGrid size={20} />
-                </div>
+                <span className="ld-bento-kicker">
+                  <LayoutGrid size={13} />
+                  <span>{isVi ? 'Bố cục tự động' : 'Auto-Layout'}</span>
+                </span>
                 <h3>{dict.landingBentoArrangeTitle}</h3>
                 <p>{dict.landingBentoArrangeDesc}</p>
               </div>
@@ -561,23 +562,27 @@ export const LandingPage: React.FC<LandingPageProps> = ({
 
             {/* Tile 2 (2 cols): Visual Clipper Card */}
             <article
-              className="ld-bento-card ld-bento-card--blue-tint ld-reveal"
+              className="ld-bento-card ld-bento-card--paper ld-reveal"
               data-reveal="card"
-              style={{ '--rd': '90ms' } as React.CSSProperties}
+              style={{ '--rd': '80ms' } as React.CSSProperties}
             >
               <div>
-                <div className="ld-clip-mini-preview" aria-hidden="true">
-                  <img src={`${BASE}samples/armchair.jpg`} alt="" loading="lazy" />
-                  <span className="ld-clip-mini-pill">Mosa</span>
-                </div>
+                <span className="ld-bento-kicker">
+                  <Puzzle size={13} />
+                  <span>Mosa Clipper</span>
+                </span>
                 <h3>{dict.landingBentoClipperTitle}</h3>
                 <p>{dict.landingBentoClipperDesc}</p>
+              </div>
+              <div className="ld-clip-mini-preview" aria-hidden="true">
+                <img src={`${BASE}samples/armchair.jpg`} alt="" loading="lazy" />
+                <span className="ld-clip-mini-pill">Mosa</span>
               </div>
               <div className="ld-bento-actions">
                 <a
                   href={`${BASE}downloads/mosa-clipper.zip`}
                   download="mosa-clipper.zip"
-                  className="ld-btn ld-btn--primary ld-btn--sm"
+                  className="ld-btn ld-btn--glass ld-btn--sm ld-btn--block"
                 >
                   <Download size={14} />
                   <span>{dict.clipperDownloadBtn}</span>
@@ -592,8 +597,8 @@ export const LandingPage: React.FC<LandingPageProps> = ({
               style={{ '--rd': '60ms' } as React.CSSProperties}
             >
               <div>
-                <span className="ld-bento-tag ld-bento-tag--light">
-                  <Sparkles size={12} />
+                <span className="ld-bento-kicker">
+                  <Sparkles size={13} />
                   <span>{dict.landingBentoAiBadge}</span>
                 </span>
                 <h3>{dict.landingBentoAiTitle}</h3>
@@ -613,12 +618,12 @@ export const LandingPage: React.FC<LandingPageProps> = ({
             <article
               className="ld-bento-card ld-bento-card--wide ld-bento-card--deck ld-reveal"
               data-reveal="card"
-              style={{ '--rd': '140ms' } as React.CSSProperties}
+              style={{ '--rd': '120ms' } as React.CSSProperties}
             >
               <div className="ld-bento-split">
                 <div>
-                  <span className="ld-bento-tag ld-bento-tag--green">
-                    <CheckCircle2 size={12} />
+                  <span className="ld-bento-kicker ld-bento-kicker--success">
+                    <CheckCircle2 size={13} />
                     <span>{isVi ? 'Trình bày & Duyệt phương án' : 'Present & Sign-off'}</span>
                   </span>
                   <h3>{dict.landingBentoExportTitle}</h3>
@@ -749,7 +754,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({
                 <button
                   type="button"
                   className={`ld-btn ld-btn--sm ld-btn--block ${
-                    pwa.status === 'installed' ? 'ld-btn--installed' : 'ld-btn--primary'
+                    pwa.status === 'installed' ? 'ld-btn--installed' : 'ld-btn--soft'
                   }`}
                   onClick={() => void pwa.triggerInstall()}
                   disabled={pwa.status === 'installed'}

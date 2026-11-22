@@ -48,10 +48,10 @@ const DEMO_CARDS: DemoCardSpec[] = [
     tagVi: 'Không gian',
     tagEn: 'Space',
     confidenceNum: 96,
-    tagColor: '#007AFF',
-    clipAppearAt: 1.5,
-    scanCrossAt: 1.7,
-    scatter: [13, 16, 35, 45],
+    tagColor: '#0059C7',
+    clipAppearAt: 0,
+    scanCrossAt: 1.45,
+    scatter: [7, 15, 34, 38],
     bento: [5, 11, 44, 54],
   },
   {
@@ -63,9 +63,9 @@ const DEMO_CARDS: DemoCardSpec[] = [
     tagEn: 'Form',
     confidenceNum: 94,
     tagColor: '#C5A47E',
-    clipAppearAt: 2.35,
-    scanCrossAt: 3.1,
-    scatter: [54, 11, 22, 37],
+    clipAppearAt: 1.25,
+    scanCrossAt: 2.55,
+    scatter: [45, 13, 21, 35],
     bento: [52, 11, 21, 34],
   },
   {
@@ -77,9 +77,9 @@ const DEMO_CARDS: DemoCardSpec[] = [
     tagEn: 'Texture',
     confidenceNum: 97,
     tagColor: '#8D9A7C',
-    clipAppearAt: 3.15,
-    scanCrossAt: 1.35,
-    scatter: [6, 55, 22, 32],
+    clipAppearAt: 2.05,
+    scanCrossAt: 3.75,
+    scatter: [70, 15, 23, 33],
     bento: [75, 11, 20, 34],
   },
   {
@@ -91,9 +91,9 @@ const DEMO_CARDS: DemoCardSpec[] = [
     tagEn: 'Line',
     confidenceNum: 92,
     tagColor: '#5856D6',
-    clipAppearAt: 3.95,
-    scanCrossAt: 2.85,
-    scatter: [44, 54, 24, 34],
+    clipAppearAt: 2.85,
+    scanCrossAt: 2.05,
+    scatter: [16, 58, 28, 30],
     bento: [52, 48, 22, 32],
   },
   {
@@ -105,9 +105,9 @@ const DEMO_CARDS: DemoCardSpec[] = [
     tagEn: 'Color',
     confidenceNum: 98,
     tagColor: '#FF9500',
-    clipAppearAt: 4.75,
-    scanCrossAt: 4.05,
-    scatter: [73, 47, 21, 34],
+    clipAppearAt: 3.65,
+    scanCrossAt: 3.25,
+    scatter: [52, 55, 30, 32],
     bento: [76, 48, 19, 32],
   },
 ];
@@ -248,17 +248,20 @@ export const InteractiveDemoStage: React.FC<InteractiveDemoStageProps> = ({
   const connectorsDrawn = activeStep > 2 || (activeStep === 2 && stepTime >= 2.2);
   const paletteRevealed = activeStep === 2 && stepTime >= 3.8;
 
-  // Chapter 3: Handoff deck reveal, live FF&E counter, and Client Approve click at 4.7s
-  const handoffOpen = activeStep === 3 && stepTime >= 0.7;
-  const ffeRow1Shown = activeStep === 3 && stepTime >= 1.5;
-  const ffeRow2Shown = activeStep === 3 && stepTime >= 2.3;
-  const ffeRow3Shown = activeStep === 3 && stepTime >= 3.0;
+  // Chapter 3: Handoff deck reveal, live FF&E counter synced with visible rows, and Client Approve click at 4.7s
+  const handoffOpen = activeStep === 3 && stepTime >= 0.45;
+  const ffeRow1Shown = activeStep === 3 && stepTime >= 0.75;
+  const ffeRow2Shown = activeStep === 3 && stepTime >= 1.15;
+  const ffeRow3Shown = activeStep === 3 && stepTime >= 1.55;
   const clientApproved = activeStep === 3 && stepTime >= 4.7;
 
-  // Smooth animated FF&E total counter in Chapter 4 (1.5s -> 3.8s)
-  const budgetProgress = activeStep === 3 ? Math.max(0, Math.min(1, (stepTime - 1.4) / 2.4)) : 0;
-  const animatedVnd = Math.round(42600000 * budgetProgress);
-  const animatedUsd = Math.round(1680 * budgetProgress);
+  // Step-synced FF&E total counter so the total always matches revealed rows
+  const clamp01 = (v: number) => Math.max(0, Math.min(1, v));
+  const r1 = activeStep === 3 ? clamp01((stepTime - 0.75) / 0.35) : 0;
+  const r2 = activeStep === 3 ? clamp01((stepTime - 1.15) / 0.35) : 0;
+  const r3 = activeStep === 3 ? clamp01((stepTime - 1.55) / 0.4) : 0;
+  const animatedVnd = Math.round(28500000 * r1 + 10400000 * r2 + 3700000 * r3);
+  const animatedUsd = Math.round(1120 * r1 + 410 * r2 + 150 * r3);
   const formattedBudget = isVi
     ? `${animatedVnd.toLocaleString('vi-VN')} ₫`
     : `$${animatedUsd.toLocaleString('en-US')}`;
@@ -328,9 +331,9 @@ export const InteractiveDemoStage: React.FC<InteractiveDemoStageProps> = ({
               <span>pinterest.com/pin/wabi-sabi</span>
             </div>
             <div className="ld-pin-img-wrap">
-              <img src={`${BASE}samples/living-room.jpg`} alt="" />
-              <span className={`ld-pin-mosa-btn ${stepTime >= 1.35 ? 'is-saved' : ''}`}>
-                {stepTime >= 1.35 ? (isVi ? '✓ Đã lưu' : '✓ Saved') : 'Mosa'}
+              <img src={`${BASE}samples/armchair.jpg`} alt="" />
+              <span className={`ld-pin-mosa-btn ${stepTime >= 1.15 ? 'is-saved' : ''}`}>
+                {stepTime >= 1.15 ? (isVi ? '✓ Đã lưu' : '✓ Saved') : 'Mosa'}
               </span>
             </div>
           </div>
@@ -354,7 +357,7 @@ export const InteractiveDemoStage: React.FC<InteractiveDemoStageProps> = ({
                   markerHeight="5.5"
                   orient="auto-start-reverse"
                 >
-                  <path d="M 0 1 L 10 5 L 0 9 z" fill="#007AFF" />
+                  <path d="M 0 1 L 10 5 L 0 9 z" fill="#0059C7" />
                 </marker>
               </defs>
               <path
@@ -362,7 +365,7 @@ export const InteractiveDemoStage: React.FC<InteractiveDemoStageProps> = ({
                 pathLength={1}
                 d="M 490 190 C 505 190, 505 160, 520 160"
                 fill="none"
-                stroke="#007AFF"
+                stroke="#0059C7"
                 strokeWidth="2.5"
                 markerEnd="url(#mosaDemoArrow)"
               />
@@ -371,7 +374,7 @@ export const InteractiveDemoStage: React.FC<InteractiveDemoStageProps> = ({
                 pathLength={1}
                 d="M 490 295 C 505 295, 505 340, 520 340"
                 fill="none"
-                stroke="#007AFF"
+                stroke="#0059C7"
                 strokeWidth="2.5"
                 markerEnd="url(#mosaDemoArrow)"
               />
@@ -380,7 +383,7 @@ export const InteractiveDemoStage: React.FC<InteractiveDemoStageProps> = ({
                 pathLength={1}
                 d="M 730 160 C 740 160, 740 160, 750 160"
                 fill="none"
-                stroke="#007AFF"
+                stroke="#0059C7"
                 strokeWidth="2.3"
                 markerEnd="url(#mosaDemoArrow)"
               />
@@ -392,6 +395,7 @@ export const InteractiveDemoStage: React.FC<InteractiveDemoStageProps> = ({
               const isVisible = activeStep > 0 || stepTime >= card.clipAppearAt;
               const justClipped =
                 activeStep === 0 &&
+                card.clipAppearAt > 0 &&
                 stepTime >= card.clipAppearAt &&
                 stepTime < card.clipAppearAt + 0.95;
               const isCardScanned =
@@ -539,7 +543,7 @@ export const InteractiveDemoStage: React.FC<InteractiveDemoStageProps> = ({
                 <span className="ld-handoff-eyebrow">
                   {isVi ? 'BẢN TRÌNH BÀY KHÁCH HÀNG' : 'CLIENT PRESENTATION'}
                 </span>
-                <h4>Mosa Interior Studio · MS-2026-01</h4>
+                <h4>Mosa Studio · MS-26</h4>
               </div>
               <span className={`ld-handoff-approved ${clientApproved ? 'is-stamped' : ''}`}>
                 <CheckCircle2 size={14} />

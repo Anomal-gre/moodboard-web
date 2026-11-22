@@ -2637,11 +2637,25 @@ export const App: React.FC = () => {
 
   // Render Landing Page immediately on root `/` without waiting for IndexedDB or mounting the canvas behind it (zero flash!)
   if (landingOpen) {
-    const hasExistingWorkspace =
+    let cachedHasWorkspace = false;
+    try {
+      cachedHasWorkspace = window.localStorage.getItem('mosa_has_workspace') === '1';
+    } catch {
+      cachedHasWorkspace = false;
+    }
+    const detectedWorkspace =
       Boolean(meta?.onboardingCompleted) ||
       projects.length > 1 ||
       (activeProject?.revision ?? 0) > 0 ||
       (Boolean(activeProject) && activeProject.id !== 'proj_sample_living_01');
+    if (detectedWorkspace && !cachedHasWorkspace) {
+      try {
+        window.localStorage.setItem('mosa_has_workspace', '1');
+      } catch {
+        // ignore private browsing quota errors
+      }
+    }
+    const hasExistingWorkspace = loading ? cachedHasWorkspace : detectedWorkspace;
     return (
       <>
         <LandingPage

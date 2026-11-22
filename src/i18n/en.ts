@@ -452,9 +452,10 @@ export const en: I18nDict = {
   landingCtaDirectCanvas: 'Or open sample board →',
   landingCtaStartWizard: 'Or start a guided board by discipline →',
   landingHeroEyebrow: 'Mosa',
-  landingHeroTitleLine1: 'Gather ideas.',
-  landingHeroTitleLine2: 'Shape the story.',
-  landingHeroSubtitle: 'A calm, private moodboard workspace built for visual thinkers.',
+  landingHeroTitleLine1: 'Gather visuals.',
+  landingHeroTitleLine2: 'Compose studio boards.',
+  landingHeroSubtitle:
+    'A calm, private moodboard workspace — from one-click capture to client sign-off.',
   landingTrustLine: 'Free · No account required · Saved on your device',
 
   landingDemoEyebrow: '',
