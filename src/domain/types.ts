@@ -138,6 +138,8 @@ export interface Project {
 
 export type UserDiscipline = 'interior' | 'ffe' | 'branding' | 'freeform';
 
+export type NavigationMode = 'auto' | 'trackpad' | 'mouse';
+
 export interface WorkspaceMeta {
   schemaVersion: 1;
   language: 'vi' | 'en';
@@ -147,6 +149,7 @@ export interface WorkspaceMeta {
   autoFolderSync?: boolean;
   onboardingCompleted?: boolean;
   userDiscipline?: UserDiscipline;
+  navigationMode?: NavigationMode;
 }
 
 export type ArrangeMode = 'bento' | 'freeform' | 'zones' | 'grid';

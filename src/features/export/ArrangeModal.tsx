@@ -23,6 +23,7 @@ import { getCategoryLabel, type I18nDict } from '../../i18n';
 import { prepareInferenceImageBlob } from '../../storage/assets';
 import { getAssetBlob, resolveAssetUrl } from '../../storage/workspaceRepository';
 import type { WorkerOutboundMessage } from '../../workers/classify.worker';
+import { AppleSelect, CATEGORY_DOT_COLORS } from '../../components/AppleSelect';
 import { DialogShell } from '../common/DialogShell';
 
 interface ArrangeModalProps {
@@ -519,11 +520,17 @@ export const ArrangeModal: React.FC<ArrangeModalProps> = ({
                   {item.error ? (
                     <span className="field-error">{item.error}</span>
                   ) : (
-                    <select
-                      className="input-sm arrange-ai-select"
+                    <AppleSelect<Category>
+                      size="sm"
+                      className="arrange-ai-select"
+                      ariaLabel={dict.categoryLabel}
                       value={item.editedCategory}
-                      onChange={(e) => {
-                        const nextCat = e.target.value as Category;
+                      options={CATEGORY_ORDER.map((cat) => ({
+                        value: cat,
+                        label: getCategoryLabel(dict, cat),
+                        dotColor: CATEGORY_DOT_COLORS[cat],
+                      }))}
+                      onChange={(nextCat) => {
                         setSuggestions((prev) =>
                           prev.map((s) =>
                             s.cardId === item.cardId
@@ -532,13 +539,7 @@ export const ArrangeModal: React.FC<ArrangeModalProps> = ({
                           )
                         );
                       }}
-                    >
-                      {CATEGORY_ORDER.map((cat) => (
-                        <option key={cat} value={cat}>
-                          {getCategoryLabel(dict, cat)}
-                        </option>
-                      ))}
-                    </select>
+                    />
                   )}
                 </div>
               ))}
@@ -550,17 +551,17 @@ export const ArrangeModal: React.FC<ArrangeModalProps> = ({
         <div className="field">
           <span className="field-label">{dict.arrangeModeLabel}</span>
           <div className="arrange-mode-row">
-            <select
-              className="input-sm flex-1"
+            <AppleSelect<ArrangeMode>
+              className="flex-1"
+              ariaLabel={dict.arrangeModeLabel}
               value={options.mode}
-              onChange={(e) => updateOptions({ mode: e.target.value as ArrangeMode })}
-            >
-              {archetypes.map((a) => (
-                <option key={a.mode} value={a.mode}>
-                  {a.title} — {a.desc}
-                </option>
-              ))}
-            </select>
+              options={archetypes.map((a) => ({
+                value: a.mode,
+                label: a.title,
+                description: a.desc,
+              }))}
+              onChange={(mode) => updateOptions({ mode })}
+            />
             <button
               type="button"
               className="icon-btn-sm arrange-shuffle-btn"
@@ -610,19 +611,20 @@ export const ArrangeModal: React.FC<ArrangeModalProps> = ({
           </>
         )}
 
-        <label className="field">
+        <div className="field">
           <span className="field-label">{dict.aspectPresetLabel}</span>
-          <select
-            className="input-sm"
+          <AppleSelect<AspectPreset>
+            ariaLabel={dict.aspectPresetLabel}
             value={options.aspectPreset ?? 'free'}
-            onChange={(e) => updateOptions({ aspectPreset: e.target.value as AspectPreset })}
-          >
-            <option value="free">{dict.aspectFree}</option>
-            <option value="16:9">{dict.aspect16x9}</option>
-            <option value="a4">{dict.aspectA4}</option>
-            <option value="1:1">{dict.aspect1x1}</option>
-          </select>
-        </label>
+            options={[
+              { value: 'free', label: dict.aspectFree },
+              { value: '16:9', label: dict.aspect16x9 },
+              { value: 'a4', label: dict.aspectA4 },
+              { value: '1:1', label: dict.aspect1x1 },
+            ]}
+            onChange={(aspectPreset) => updateOptions({ aspectPreset })}
+          />
+        </div>
 
         {eligibleImages.length > 0 && (
           <button

@@ -12,6 +12,7 @@ body,
   width: 100%;
   height: 100%;
   overflow: hidden;
+  overscroll-behavior: none;
   font-family: var(--font-sans);
   font-size: 13.5px;
   color: var(--ink);
@@ -503,6 +504,7 @@ textarea:focus-visible {
   position: absolute;
   inset: 0;
   overflow: hidden;
+  overscroll-behavior: none;
   touch-action: none;
 }
 
@@ -3983,4 +3985,194 @@ textarea:focus-visible {
 
 .inbox-clipper-guide p {
   margin: 0;
+}
+
+/* ==========================================================================
+   Apple HIG Custom Frosted Dropdown (AppleSelect)
+   Replaces clunky native OS <select> popups across Light & Dark Studio modes
+   ========================================================================== */
+.apple-select-trigger {
+  width: 100%;
+  min-width: 0;
+  height: 36px;
+  padding: 0 11px 0 12px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  background: var(--surface-subtle);
+  color: var(--ink);
+  font-size: 13px;
+  font-weight: 500;
+  display: inline-flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  text-align: left;
+  transition:
+    background var(--dur-fast) var(--ease-out),
+    border-color var(--dur-fast) var(--ease-out),
+    box-shadow var(--dur-fast) var(--ease-out);
+}
+
+.apple-select-trigger.is-sm {
+  height: 30px;
+  padding: 0 8px 0 10px;
+  font-size: 12px;
+  border-radius: 9px;
+}
+
+.apple-select-trigger:hover:not(:disabled) {
+  border-color: var(--border-strong);
+  background: var(--surface-elevated);
+}
+
+.apple-select-trigger.is-open,
+.apple-select-trigger:focus-visible {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-soft);
+}
+
+.apple-select-value {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  flex: 1;
+}
+
+.apple-select-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.08);
+}
+
+.apple-select-chevron {
+  color: var(--ink-muted);
+  flex-shrink: 0;
+  transition: transform 180ms var(--ease-out), color 160ms ease;
+}
+
+.apple-select-chevron.is-open {
+  transform: rotate(180deg);
+  color: var(--accent);
+}
+
+.apple-select-menu {
+  position: fixed;
+  z-index: 260;
+  padding: 5px;
+  border-radius: 13px;
+  border: 1px solid var(--border-strong);
+  background: color-mix(in srgb, var(--surface-solid) 88%, transparent);
+  backdrop-filter: saturate(180%) blur(24px);
+  -webkit-backdrop-filter: saturate(180%) blur(24px);
+  box-shadow:
+    0 18px 44px rgba(0, 0, 0, 0.24),
+    0 2px 8px rgba(0, 0, 0, 0.1);
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  animation: appleSelectIn 140ms cubic-bezier(0.22, 1, 0.36, 1) both;
+  transform-origin: top center;
+}
+
+.apple-select-menu.is-up {
+  transform: translateY(-100%);
+  transform-origin: bottom center;
+  animation-name: appleSelectInUp;
+}
+
+@keyframes appleSelectIn {
+  0% {
+    opacity: 0;
+    transform: translateY(-4px) scale(0.97);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes appleSelectInUp {
+  0% {
+    opacity: 0;
+    transform: translateY(calc(-100% + 4px)) scale(0.97);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(-100%) scale(1);
+  }
+}
+
+.apple-select-option {
+  width: 100%;
+  border: none;
+  border-radius: 9px;
+  padding: 7px 10px;
+  background: transparent;
+  color: var(--ink);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  text-align: left;
+  transition: background 110ms ease, color 110ms ease;
+}
+
+.apple-select-option.is-highlighted {
+  background: var(--surface-subtle);
+}
+
+.apple-select-option.is-selected {
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+.apple-select-option-main {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  flex: 1;
+}
+
+.apple-select-option-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+}
+
+.apple-select-option-label {
+  font-size: 13px;
+  font-weight: 550;
+  line-height: 1.25;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.apple-select-option.is-selected .apple-select-option-label {
+  font-weight: 650;
+}
+
+.apple-select-option-desc {
+  font-size: 11px;
+  line-height: 1.25;
+  color: var(--ink-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.apple-select-option.is-selected .apple-select-option-desc {
+  color: color-mix(in srgb, var(--accent) 82%, var(--ink-muted));
+}
+
+.apple-select-check {
+  color: var(--accent);
+  flex-shrink: 0;
 }

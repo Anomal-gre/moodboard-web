@@ -31,6 +31,7 @@ import type {
   ArrangeOptions,
   Card,
   Category,
+  NavigationMode,
   Project,
   ProjectAppearance,
   ProjectView,
@@ -645,6 +646,16 @@ export const App: React.FC = () => {
     (lang: Language) => {
       if (!meta) return;
       const nextMeta: WorkspaceMeta = { ...meta, language: lang };
+      setMeta(nextMeta);
+      void saveWorkspaceMeta(nextMeta);
+    },
+    [meta]
+  );
+
+  const handleChangeNavigationMode = useCallback(
+    (navigationMode: NavigationMode) => {
+      if (!meta) return;
+      const nextMeta: WorkspaceMeta = { ...meta, navigationMode };
       setMeta(nextMeta);
       void saveWorkspaceMeta(nextMeta);
     },
@@ -2148,6 +2159,7 @@ export const App: React.FC = () => {
     presentMode,
     editingCardId,
     modalOpen: blockingModalOpen,
+    navigationMode: meta?.navigationMode ?? 'auto',
     onViewChange: handleViewChange,
     onSelectChange: (ids) => {
       setInspectorHiddenForCard(null);
@@ -2966,10 +2978,12 @@ export const App: React.FC = () => {
                 }}
                 appearance={activeProject.appearance}
                 language={language}
+                navigationMode={meta?.navigationMode ?? 'auto'}
                 syncFolderName={syncFolderHandle?.name ?? null}
                 dict={dict}
                 onChangeAppearance={handleChangeAppearance}
                 onChangeLanguage={handleChangeLanguage}
+                onChangeNavigationMode={handleChangeNavigationMode}
                 onOpenStorageHub={() => setBackupOpen(true)}
               />
 

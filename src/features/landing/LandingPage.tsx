@@ -2,23 +2,19 @@ import React, { useEffect, useRef, useState } from 'react';
 import {
   ArrowRight,
   Check,
-  Cpu,
+  CheckCircle2,
   Download,
-  FileArchive,
-  FileSpreadsheet,
   FolderSync,
   Globe,
   HardDrive,
   LayoutGrid,
-  Link2,
-  Lock,
   Minus,
   MonitorDown,
   Play,
   Puzzle,
   RefreshCw,
   ShieldCheck,
-  WifiOff,
+  Sparkles,
   X,
 } from 'lucide-react';
 import type { I18nDict } from '../../i18n';
@@ -39,6 +35,7 @@ interface LandingPageProps {
 const BASE = import.meta.env.BASE_URL || './';
 
 type CellState = 'yes' | 'no' | 'partial' | string;
+type ShowcasePresetId = 'interior' | 'materials' | 'editorial';
 
 export const LandingPage: React.FC<LandingPageProps> = ({
   dict,
@@ -52,7 +49,9 @@ export const LandingPage: React.FC<LandingPageProps> = ({
   const [storageReport, setStorageReport] = useState<StorageHealthReport | null>(null);
   const [scrollPct, setScrollPct] = useState(0);
   const [storageInView, setStorageInView] = useState(false);
+  const [showcaseTab, setShowcaseTab] = useState<ShowcasePresetId>('interior');
   const pwa = usePwaInstall();
+  const isVi = language === 'vi';
 
   useEffect(() => {
     let alive = true;
@@ -66,7 +65,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({
     };
   }, []);
 
-  // Apple-style scroll progress hairline & IntersectionObserver scroll-reveal choreography
+  // Scroll progress hairline & IntersectionObserver scroll-reveal choreography
   useEffect(() => {
     const root = scrollRootRef.current;
     if (!root) return;
@@ -150,6 +149,15 @@ export const LandingPage: React.FC<LandingPageProps> = ({
         )
       : 4;
 
+  const designElementChips = [
+    { label: isVi ? 'Không gian' : 'Space', color: '#007AFF' },
+    { label: isVi ? 'Hình khối' : 'Form', color: '#C5A47E' },
+    { label: isVi ? 'Kết cấu' : 'Texture', color: '#8D9A7C' },
+    { label: isVi ? 'Màu sắc' : 'Color', color: '#FF9500' },
+    { label: isVi ? 'Đường nét' : 'Line', color: '#5856D6' },
+    { label: isVi ? 'Chữ & Type' : 'Typography', color: '#AF52DE' },
+  ];
+
   const comparisonRows: Array<{
     feature: string;
     mosa: CellState;
@@ -229,7 +237,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({
 
   return (
     <div ref={scrollRootRef} className="ld-root">
-      {/* Apple-style Sticky Frosted Global Nav */}
+      {/* Sticky Frosted Navigation */}
       <header className="ld-nav">
         <div className="ld-nav-inner">
           <button
@@ -245,6 +253,9 @@ export const LandingPage: React.FC<LandingPageProps> = ({
             <button type="button" onClick={() => scrollToSection('demo')}>
               {dict.landingNavDemo}
             </button>
+            <button type="button" onClick={() => scrollToSection('showcase')}>
+              {dict.landingNavShowcase}
+            </button>
             <button type="button" onClick={() => scrollToSection('features')}>
               {dict.landingNavFeatures}
             </button>
@@ -253,9 +264,6 @@ export const LandingPage: React.FC<LandingPageProps> = ({
             </button>
             <button type="button" onClick={() => scrollToSection('install')}>
               {dict.landingNavInstall}
-            </button>
-            <button type="button" onClick={() => scrollToSection('privacy')}>
-              {dict.landingNavPrivacy}
             </button>
           </nav>
 
@@ -290,7 +298,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({
         </div>
       </header>
 
-      {/* Hero Section */}
+      {/* Airy Apple Editorial Hero */}
       <section className="ld-hero">
         <div className="ld-hero-aura ld-hero-aura--left" aria-hidden="true" />
         <div className="ld-hero-aura ld-hero-aura--right" aria-hidden="true" />
@@ -332,19 +340,11 @@ export const LandingPage: React.FC<LandingPageProps> = ({
           <div className="ld-hero-sub-row ld-hero-enter" style={{ '--d': '430ms' } as React.CSSProperties}>
             <span className="ld-trust-caption">{dict.landingTrustLine}</span>
             {hasExistingWorkspace ? (
-              <button
-                type="button"
-                className="ld-inline-link"
-                onClick={onStartOnboarding}
-              >
+              <button type="button" className="ld-inline-link" onClick={onStartOnboarding}>
                 {dict.landingCtaStartWizard}
               </button>
             ) : (
-              <button
-                type="button"
-                className="ld-inline-link"
-                onClick={onEnterCanvasDirectly}
-              >
+              <button type="button" className="ld-inline-link" onClick={onEnterCanvasDirectly}>
                 {dict.landingCtaDirectCanvas}
               </button>
             )}
@@ -352,7 +352,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({
         </div>
       </section>
 
-      {/* 30-Second Interactive Demo Showcase */}
+      {/* 30-Second Choreographed Film Showcase */}
       <section id="demo" className="ld-section ld-section--tinted">
         <div className="ld-container">
           <div className="ld-section-head ld-reveal" data-reveal="section">
@@ -362,17 +362,176 @@ export const LandingPage: React.FC<LandingPageProps> = ({
           </div>
 
           <div className="ld-reveal" data-reveal="demo" style={{ '--rd': '80ms' } as React.CSSProperties}>
-            <InteractiveDemoStage
-              dict={dict}
-              language={language}
-              onTryNow={handlePrimaryCta}
-            />
+            <InteractiveDemoStage dict={dict} language={language} onTryNow={handlePrimaryCta} />
           </div>
         </div>
       </section>
 
-      {/* Apple-Style Bento Features Grid */}
-      <section id="features" className="ld-section">
+      {/* Interactive 3-Style Visual Moodboard Gallery Showcase */}
+      <section id="showcase" className="ld-section">
+        <div className="ld-container">
+          <div className="ld-section-head ld-reveal" data-reveal="section">
+            <span className="ld-section-eyebrow">{dict.landingShowcaseEyebrow}</span>
+            <h2 className="ld-section-title">{dict.landingShowcaseTitle}</h2>
+            <p className="ld-section-desc">{dict.landingShowcaseSubtitle}</p>
+          </div>
+
+          <div className="ld-showcase-tabs ld-reveal" data-reveal="section" role="tablist">
+            <button
+              type="button"
+              role="tab"
+              aria-selected={showcaseTab === 'interior'}
+              className={`ld-showcase-tab ${showcaseTab === 'interior' ? 'is-active' : ''}`}
+              onClick={() => setShowcaseTab('interior')}
+            >
+              {dict.landingShowcaseTab1}
+            </button>
+            <button
+              type="button"
+              role="tab"
+              aria-selected={showcaseTab === 'materials'}
+              className={`ld-showcase-tab ${showcaseTab === 'materials' ? 'is-active' : ''}`}
+              onClick={() => setShowcaseTab('materials')}
+            >
+              {dict.landingShowcaseTab2}
+            </button>
+            <button
+              type="button"
+              role="tab"
+              aria-selected={showcaseTab === 'editorial'}
+              className={`ld-showcase-tab ${showcaseTab === 'editorial' ? 'is-active' : ''}`}
+              onClick={() => setShowcaseTab('editorial')}
+            >
+              {dict.landingShowcaseTab3}
+            </button>
+          </div>
+
+          <div
+            className={`ld-gallery-stage is-mode-${showcaseTab} ld-reveal`}
+            data-reveal="card"
+            style={{ '--rd': '80ms' } as React.CSSProperties}
+          >
+            {showcaseTab === 'interior' && (
+              <div key="interior" className="ld-gal-board ld-gal-board--interior">
+                <figure className="ld-gal-photo ld-gal-hero">
+                  <img src={`${BASE}samples/living-room.jpg`} alt="" loading="lazy" />
+                  <figcaption>{isVi ? 'Không gian chính · Wabi-Sabi' : 'Hero Space · Wabi-Sabi'}</figcaption>
+                </figure>
+                <figure className="ld-gal-photo ld-gal-chair">
+                  <img src={`${BASE}samples/armchair.jpg`} alt="" loading="lazy" />
+                  <figcaption>{isVi ? 'Hình khối · Ghế sồi' : 'Form · Oak Armchair'}</figcaption>
+                </figure>
+                <figure className="ld-gal-photo ld-gal-plan">
+                  <img src={`${BASE}samples/floor-plan.jpg`} alt="" loading="lazy" />
+                  <figcaption>{isVi ? 'Đường nét · Mặt bằng 1:50' : 'Line · 1:50 Plan'}</figcaption>
+                </figure>
+                <div className="ld-gal-note">
+                  <span>{isVi ? 'GHI CHÚ Ý TƯỞNG' : 'CONCEPT NOTE'}</span>
+                  <strong>{isVi ? 'Ánh sáng tự nhiên & bề mặt thô mộc' : 'Soft daylight & tactile warmth'}</strong>
+                  <p>
+                    {isVi
+                      ? 'Ưu tiên gỗ sồi dầu mờ, vải lanh tự nhiên và đường cong mềm cho khu vực tiếp khách.'
+                      : 'Matte oiled oak, natural linen weave, and gentle curved silhouettes.'}
+                  </p>
+                </div>
+                <div className="ld-gal-palette-bar">
+                  {[
+                    { hex: '#DED5C5', name: 'Limestone', light: true },
+                    { hex: '#C5A47E', name: 'Warm Oak', light: true },
+                    { hex: '#8D9A7C', name: 'Muted Sage' },
+                    { hex: '#5E594E', name: 'Umber' },
+                    { hex: '#2B2A27', name: 'Charcoal' },
+                  ].map((sw) => (
+                    <div
+                      key={sw.hex}
+                      className={`ld-gal-swatch ${sw.light ? 'is-light' : ''}`}
+                      style={{ background: sw.hex }}
+                    >
+                      <strong>{sw.name}</strong>
+                      <span>{sw.hex}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {showcaseTab === 'materials' && (
+              <div key="materials" className="ld-gal-board ld-gal-board--materials">
+                <figure className="ld-gal-photo ld-gal-mat-hero">
+                  <img src={`${BASE}samples/material-texture.jpg`} alt="" loading="lazy" />
+                  <figcaption>{isVi ? 'Kết cấu · Gỗ · Đá · Vải lanh' : 'Texture · Wood · Stone · Linen'}</figcaption>
+                </figure>
+                <figure className="ld-gal-photo ld-gal-mat-swatches">
+                  <img src={`${BASE}samples/paint-swatches.jpg`} alt="" loading="lazy" />
+                  <figcaption>{isVi ? 'Màu sắc · Bảng sơn mờ' : 'Color · Matte Paint Chips'}</figcaption>
+                </figure>
+                <figure className="ld-gal-photo ld-gal-mat-chair">
+                  <img src={`${BASE}samples/armchair.jpg`} alt="" loading="lazy" />
+                  <figcaption>{isVi ? 'Vật thể · Hoàn thiện sồi tự nhiên' : 'Object · Natural Oak Finish'}</figcaption>
+                </figure>
+                <div className="ld-gal-spec-card">
+                  <div className="ld-gal-spec-head">
+                    <span>{isVi ? 'BẢNG VẬT LIỆU & DỰ TOÁN' : 'MATERIAL & BUDGET SPEC'}</span>
+                    <span className="ld-gal-spec-pill">{isVi ? 'Đã chốt mẫu' : 'Approved'}</span>
+                  </div>
+                  <div className="ld-gal-spec-row">
+                    <span>MT-01 · {isVi ? 'Gỗ sồi lau dầu mờ' : 'Oiled White Oak'}</span>
+                    <strong>12 m²</strong>
+                  </div>
+                  <div className="ld-gal-spec-row">
+                    <span>MT-02 · {isVi ? 'Đá vôi Travertine thô' : 'Honed Travertine'}</span>
+                    <strong>8 m²</strong>
+                  </div>
+                  <div className="ld-gal-spec-row">
+                    <span>TX-03 · {isVi ? 'Vải lanh Bỉ dệt thô' : 'Belgian Raw Linen'}</span>
+                    <strong>6 m</strong>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {showcaseTab === 'editorial' && (
+              <div key="editorial" className="ld-gal-board ld-gal-board--editorial">
+                <div className="ld-gal-type-poster">
+                  <span className="ld-gal-type-kicker">ATELIER · ISSUE 04</span>
+                  <h3>
+                    Quiet
+                    <br />
+                    Forms.
+                  </h3>
+                  <p>Bricolage Grotesque · Inter · Editorial Grid 0°</p>
+                </div>
+                <figure className="ld-gal-photo ld-gal-ed-chair">
+                  <img src={`${BASE}samples/armchair.jpg`} alt="" loading="lazy" />
+                  <figcaption>{isVi ? 'Hình khối · Điểm nhấn' : 'Form · Sculpture'}</figcaption>
+                </figure>
+                <figure className="ld-gal-photo ld-gal-ed-room">
+                  <img src={`${BASE}samples/living-room.jpg`} alt="" loading="lazy" />
+                  <figcaption>{isVi ? 'Bối cảnh · Nhịp ánh sáng' : 'Mood · Daylight Rhythm'}</figcaption>
+                </figure>
+                <figure className="ld-gal-photo ld-gal-ed-tex">
+                  <img src={`${BASE}samples/material-texture.jpg`} alt="" loading="lazy" />
+                  <figcaption>{isVi ? 'Bề mặt · Giấy & Vải' : 'Surface · Paper & Weave'}</figcaption>
+                </figure>
+              </div>
+            )}
+
+            <div className="ld-gallery-footer">
+              <span>
+                {showcaseTab === 'interior' && dict.landingShowcaseTab1Caption}
+                {showcaseTab === 'materials' && dict.landingShowcaseTab2Caption}
+                {showcaseTab === 'editorial' && dict.landingShowcaseTab3Caption}
+              </span>
+              <button type="button" className="ld-inline-link" onClick={handlePrimaryCta}>
+                {dict.landingDemoTryBoard} →
+              </button>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* Visual-First 4-Tile Bento Highlights (No tech walls!) */}
+      <section id="features" className="ld-section ld-section--tinted">
         <div className="ld-container">
           <div className="ld-section-head ld-reveal" data-reveal="section">
             <span className="ld-section-eyebrow">{dict.landingFeaturesEyebrow}</span>
@@ -380,67 +539,40 @@ export const LandingPage: React.FC<LandingPageProps> = ({
           </div>
 
           <div className="ld-bento-grid">
-            {/* Tile 1: Wide Dark Obsidian AI CLIP Hero Card */}
+            {/* Tile 1 (Wide 4 cols): Visual Art-Directed Layout Preview */}
             <article
-              className="ld-bento-card ld-bento-card--wide ld-bento-card--obsidian ld-reveal"
+              className="ld-bento-card ld-bento-card--wide ld-bento-card--visual ld-reveal"
               data-reveal="card"
               style={{ '--rd': '0ms' } as React.CSSProperties}
             >
-              <div className="ld-bento-top">
-                <span className="ld-bento-tag ld-bento-tag--dark">
-                  <span className="ld-live-dot ld-live-dot--cyan" aria-hidden="true" />
-                  <Cpu size={13} />
-                  <span>{dict.landingBentoAiBadge}</span>
-                </span>
-                <h3>{dict.landingBentoAiTitle}</h3>
-                <p>{dict.landingBentoAiDesc}</p>
+              <div className="ld-bento-visual-copy">
+                <div className="ld-bento-icon-wrap">
+                  <LayoutGrid size={20} />
+                </div>
+                <h3>{dict.landingBentoArrangeTitle}</h3>
+                <p>{dict.landingBentoArrangeDesc}</p>
               </div>
-              <div className="ld-bento-ai-metrics">
-                <div className="ld-ai-metric">
-                  <strong>{dict.landingBentoAiStat1Val}</strong>
-                  <span>{dict.landingBentoAiStat1Label}</span>
-                </div>
-                <div className="ld-ai-metric">
-                  <strong>{dict.landingBentoAiStat2Val}</strong>
-                  <span>{dict.landingBentoAiStat2Label}</span>
-                </div>
-                <div className="ld-ai-metric">
-                  <strong>q8 WASM</strong>
-                  <span>clip-vit-base-patch32</span>
-                </div>
+              <div className="ld-bento-collage-art" aria-hidden="true">
+                <img className="bca-main" src={`${BASE}samples/living-room.jpg`} alt="" loading="lazy" />
+                <img className="bca-top" src={`${BASE}samples/armchair.jpg`} alt="" loading="lazy" />
+                <img className="bca-bot" src={`${BASE}samples/material-texture.jpg`} alt="" loading="lazy" />
               </div>
             </article>
 
-            {/* Tile 2: 4 Smart Layout Modes */}
-            <article
-              className="ld-bento-card ld-reveal"
-              data-reveal="card"
-              style={{ '--rd': '90ms' } as React.CSSProperties}
-            >
-              <div className="ld-bento-icon-wrap">
-                <LayoutGrid size={20} />
-              </div>
-              <h3>{dict.landingBentoArrangeTitle}</h3>
-              <p>{dict.landingBentoArrangeDesc}</p>
-              <div className="ld-mini-bento-art" aria-hidden="true">
-                <span className="mba-hero" />
-                <span className="mba-a" />
-                <span className="mba-b" />
-                <span className="mba-bar" />
-              </div>
-            </article>
-
-            {/* Tile 3: Mosa Web Clipper + Direct Download */}
+            {/* Tile 2 (2 cols): Visual Clipper Card */}
             <article
               className="ld-bento-card ld-bento-card--blue-tint ld-reveal"
               data-reveal="card"
-              style={{ '--rd': '60ms' } as React.CSSProperties}
+              style={{ '--rd': '90ms' } as React.CSSProperties}
             >
-              <div className="ld-bento-icon-wrap ld-bento-icon-wrap--blue">
-                <Puzzle size={20} />
+              <div>
+                <div className="ld-clip-mini-preview" aria-hidden="true">
+                  <img src={`${BASE}samples/armchair.jpg`} alt="" loading="lazy" />
+                  <span className="ld-clip-mini-pill">Mosa</span>
+                </div>
+                <h3>{dict.landingBentoClipperTitle}</h3>
+                <p>{dict.landingBentoClipperDesc}</p>
               </div>
-              <h3>{dict.landingBentoClipperTitle}</h3>
-              <p>{dict.landingBentoClipperDesc}</p>
               <div className="ld-bento-actions">
                 <a
                   href={`${BASE}downloads/mosa-clipper.zip`}
@@ -453,68 +585,67 @@ export const LandingPage: React.FC<LandingPageProps> = ({
               </div>
             </article>
 
-            {/* Tile 4: Wide White-Label Studio PDF & FF&E Card */}
+            {/* Tile 3 (2 cols): 6 Universal Design Elements Visual Card */}
             <article
-              className="ld-bento-card ld-bento-card--wide ld-bento-card--warm ld-reveal"
+              className="ld-bento-card ld-bento-card--warm ld-reveal"
+              data-reveal="card"
+              style={{ '--rd': '60ms' } as React.CSSProperties}
+            >
+              <div>
+                <span className="ld-bento-tag ld-bento-tag--light">
+                  <Sparkles size={12} />
+                  <span>{dict.landingBentoAiBadge}</span>
+                </span>
+                <h3>{dict.landingBentoAiTitle}</h3>
+                <p>{dict.landingBentoAiDesc}</p>
+              </div>
+              <div className="ld-elements-cloud" aria-hidden="true">
+                {designElementChips.map((el) => (
+                  <span key={el.label} className="ld-element-pill">
+                    <span className="ld-element-dot" style={{ background: el.color }} />
+                    <span>{el.label}</span>
+                  </span>
+                ))}
+              </div>
+            </article>
+
+            {/* Tile 4 (Wide 4 cols): Studio Presentation & Client Sign-Off Preview */}
+            <article
+              className="ld-bento-card ld-bento-card--wide ld-bento-card--deck ld-reveal"
               data-reveal="card"
               style={{ '--rd': '140ms' } as React.CSSProperties}
             >
               <div className="ld-bento-split">
                 <div>
-                  <div className="ld-bento-icon-wrap">
-                    <FileSpreadsheet size={20} />
-                  </div>
+                  <span className="ld-bento-tag ld-bento-tag--green">
+                    <CheckCircle2 size={12} />
+                    <span>{isVi ? 'Trình bày & Duyệt phương án' : 'Present & Sign-off'}</span>
+                  </span>
                   <h3>{dict.landingBentoExportTitle}</h3>
                   <p>{dict.landingBentoExportDesc}</p>
                 </div>
                 <div className="ld-export-preview-stack" aria-hidden="true">
                   <div className="ld-export-chip">
                     <span className="ld-export-ext">PDF</span>
-                    <span>White-label Studio Deck</span>
+                    <span>{isVi ? 'Bản trình bày mang logo riêng' : 'Branded Studio Deck'}</span>
                   </div>
                   <div className="ld-export-chip">
-                    <span className="ld-export-ext ld-export-ext--green">CSV</span>
-                    <span>FF&amp;E Qty × Unit Price</span>
+                    <span className="ld-export-ext ld-export-ext--green">FF&amp;E</span>
+                    <span>{isVi ? 'Bảng dự toán tự cộng tổng' : 'Auto-Summed Budget'}</span>
                   </div>
                   <div className="ld-export-chip">
                     <span className="ld-export-ext ld-export-ext--blue">HTML</span>
-                    <span>Read-Only Client Approval</span>
+                    <span>{isVi ? 'Tệp tương tác khách duyệt ngay' : 'Interactive Client Review'}</span>
                   </div>
                 </div>
               </div>
-            </article>
-
-            {/* Tile 5: Real .mosa Files & Local Folder Sync */}
-            <article
-              className="ld-bento-card ld-bento-card--half ld-reveal"
-              data-reveal="card"
-              style={{ '--rd': '60ms' } as React.CSSProperties}
-            >
-              <div className="ld-bento-icon-wrap">
-                <FolderSync size={20} />
-              </div>
-              <h3>{dict.landingBentoSyncTitle}</h3>
-              <p>{dict.landingBentoSyncDesc}</p>
-            </article>
-
-            {/* Tile 6: Source Provenance */}
-            <article
-              className="ld-bento-card ld-bento-card--half ld-reveal"
-              data-reveal="card"
-              style={{ '--rd': '140ms' } as React.CSSProperties}
-            >
-              <div className="ld-bento-icon-wrap">
-                <Link2 size={20} />
-              </div>
-              <h3>{dict.landingBentoSourceTitle}</h3>
-              <p>{dict.landingBentoSourceDesc}</p>
             </article>
           </div>
         </div>
       </section>
 
-      {/* Competitor Comparison Table */}
-      <section id="compare" className="ld-section ld-section--tinted">
+      {/* Clean, Jargon-Free Comparison */}
+      <section id="compare" className="ld-section">
         <div className="ld-container">
           <div className="ld-section-head ld-reveal" data-reveal="section">
             <span className="ld-section-eyebrow">{dict.landingCompareEyebrow}</span>
@@ -553,8 +684,8 @@ export const LandingPage: React.FC<LandingPageProps> = ({
         </div>
       </section>
 
-      {/* Flexible Hybrid Setup & Unified Local Sync Section */}
-      <section id="install" className="ld-section">
+      {/* Flexible Hybrid Setup & Quiet Privacy Bar */}
+      <section id="install" className="ld-section ld-section--tinted">
         <div className="ld-container">
           <div className="ld-section-head ld-reveal" data-reveal="section">
             <span className="ld-section-eyebrow">{dict.landingInstallEyebrow}</span>
@@ -563,7 +694,6 @@ export const LandingPage: React.FC<LandingPageProps> = ({
           </div>
 
           <div className="ld-install-grid">
-            {/* Card 1: Instant Web App */}
             <article
               className="ld-install-card ld-reveal"
               data-reveal="card"
@@ -591,7 +721,6 @@ export const LandingPage: React.FC<LandingPageProps> = ({
               </div>
             </article>
 
-            {/* Card 2: 1-Click Desktop App (PWA — 100% Shared Data) */}
             <article
               className="ld-install-card ld-install-card--featured ld-reveal"
               data-reveal="card"
@@ -632,7 +761,6 @@ export const LandingPage: React.FC<LandingPageProps> = ({
               </div>
             </article>
 
-            {/* Card 3: Web Clipper Extension */}
             <article
               className="ld-install-card ld-reveal"
               data-reveal="card"
@@ -661,28 +789,12 @@ export const LandingPage: React.FC<LandingPageProps> = ({
             </article>
           </div>
 
-          <div className="ld-sync-note ld-reveal" data-reveal="card" style={{ '--rd': '120ms' } as React.CSSProperties}>
-            <FolderSync size={16} />
-            <span>{dict.landingInstallSyncNote}</span>
-          </div>
-        </div>
-      </section>
-
-      {/* Local-First Privacy & Live Storage Health Section */}
-      <section id="privacy" className="ld-section ld-section--tinted">
-        <div className="ld-container">
-          <div className="ld-section-head ld-reveal" data-reveal="section">
-            <span className="ld-section-eyebrow">{dict.landingTrustEyebrow}</span>
-            <h2 className="ld-section-title">{dict.landingTrustTitle}</h2>
-            <p className="ld-section-desc">{dict.landingTrustSubtitle}</p>
-          </div>
-
-          {/* Live Browser Storage Meter */}
-          <div className="ld-storage-banner ld-reveal" data-reveal="storage">
+          {/* Quiet Live Local Storage & Privacy Strip */}
+          <div id="privacy" className="ld-storage-banner ld-storage-banner--compact ld-reveal" data-reveal="storage">
             <div className="ld-storage-banner-head">
               <div className="ld-storage-title-wrap">
                 <span className="ld-storage-icon-badge">
-                  <HardDrive size={18} />
+                  <HardDrive size={17} />
                 </span>
                 <div>
                   <span className="ld-storage-kicker">{dict.landingStorageLiveLabel}</span>
@@ -704,29 +816,15 @@ export const LandingPage: React.FC<LandingPageProps> = ({
                 style={{ width: `${storageInView ? usedRatioPct : 0}%` }}
               />
             </div>
-          </div>
-
-          <div className="ld-trust-grid">
-            <div className="ld-trust-card ld-reveal" data-reveal="card" style={{ '--rd': '0ms' } as React.CSSProperties}>
-              <Lock size={20} />
-              <h3>{dict.landingTrustCard1Title}</h3>
-              <p>{dict.landingTrustCard1Desc}</p>
-            </div>
-            <div className="ld-trust-card ld-reveal" data-reveal="card" style={{ '--rd': '90ms' } as React.CSSProperties}>
-              <WifiOff size={20} />
-              <h3>{dict.landingTrustCard2Title}</h3>
-              <p>{dict.landingTrustCard2Desc}</p>
-            </div>
-            <div className="ld-trust-card ld-reveal" data-reveal="card" style={{ '--rd': '180ms' } as React.CSSProperties}>
-              <FileArchive size={20} />
-              <h3>{dict.landingTrustCard3Title}</h3>
-              <p>{dict.landingTrustCard3Desc}</p>
+            <div className="ld-sync-inline-note">
+              <FolderSync size={14} />
+              <span>{dict.landingInstallSyncNote}</span>
             </div>
           </div>
         </div>
       </section>
 
-      {/* Closing CTA Band */}
+      {/* Closing Editorial CTA */}
       <section className="ld-closing">
         <div className="ld-container ld-closing-inner ld-reveal" data-reveal="section">
           <h2>{dict.landingClosingTitle}</h2>

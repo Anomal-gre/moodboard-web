@@ -13,6 +13,7 @@ import { prepareInferenceImageBlob } from '../../storage/assets';
 import { getAssetBlob, resolveAssetUrl } from '../../storage/workspaceRepository';
 import type { WorkerOutboundMessage } from '../../workers/classify.worker';
 import { DialogShell } from '../common/DialogShell';
+import { AppleSelect, CATEGORY_DOT_COLORS } from '../../components/AppleSelect';
 
 interface ClassifyModalProps {
   open: boolean;
@@ -478,11 +479,17 @@ export const ClassifyModal: React.FC<ClassifyModalProps> = ({
                   )}
                 </div>
                 {!item.error && (
-                  <select
-                    className="input-sm classify-select"
+                  <AppleSelect<Category>
+                    size="sm"
+                    className="classify-select"
+                    ariaLabel={dict.categoryLabel}
                     value={item.editedCategory}
-                    onChange={(e) => {
-                      const nextCat = e.target.value as Category;
+                    options={CATEGORY_ORDER.map((cat) => ({
+                      value: cat,
+                      label: getCategoryLabel(dict, cat),
+                      dotColor: CATEGORY_DOT_COLORS[cat],
+                    }))}
+                    onChange={(nextCat) => {
                       setSuggestions((prev) =>
                         prev.map((s) =>
                           s.cardId === item.cardId
@@ -491,13 +498,7 @@ export const ClassifyModal: React.FC<ClassifyModalProps> = ({
                         )
                       );
                     }}
-                  >
-                    {CATEGORY_ORDER.map((cat) => (
-                      <option key={cat} value={cat}>
-                        {getCategoryLabel(dict, cat)}
-                      </option>
-                    ))}
-                  </select>
+                  />
                 )}
               </div>
             ))}

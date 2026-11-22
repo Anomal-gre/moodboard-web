@@ -14,6 +14,7 @@ import {
 import type { ExportPngOptions, Project, StudioProfile } from '../../domain/types';
 import type { I18nDict } from '../../i18n';
 import { DialogShell } from '../common/DialogShell';
+import { AppleSelect } from '../../components/AppleSelect';
 import {
   buildSourcesManifest,
   exportFfeScheduleCsv,
@@ -320,22 +321,18 @@ export const ExportModal: React.FC<ExportModalProps> = ({
                     }
                   />
                 </label>
-                <label className="field" style={{ width: 88, flexShrink: 0 }}>
+                <div className="field" style={{ width: 108, flexShrink: 0 }}>
                   <span className="field-label">{dict.studioCurrencyLabel}</span>
-                  <select
-                    className="input-sm"
+                  <AppleSelect<'VND' | 'USD'>
+                    ariaLabel={dict.studioCurrencyLabel}
                     value={profile.currency ?? 'VND'}
-                    onChange={(e) =>
-                      onChangeStudioProfile({
-                        ...profile,
-                        currency: e.target.value as 'VND' | 'USD',
-                      })
-                    }
-                  >
-                    <option value="VND">VND (₫)</option>
-                    <option value="USD">USD ($)</option>
-                  </select>
-                </label>
+                    options={[
+                      { value: 'VND', label: 'VND (₫)' },
+                      { value: 'USD', label: 'USD ($)' },
+                    ]}
+                    onChange={(currency) => onChangeStudioProfile({ ...profile, currency })}
+                  />
+                </div>
               </div>
 
               <label className="field">

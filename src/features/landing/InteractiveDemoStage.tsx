@@ -292,10 +292,10 @@ export const InteractiveDemoStage: React.FC<InteractiveDemoStageProps> = ({
               <span>{clippedCount}</span>
             </span>
             <span className="ld-demo-pill-badge ld-demo-pill-badge--mode">
-              {activeStep === 0 && 'Web Clipper'}
-              {activeStep === 1 && `CLIP WASM · ${scannedCount}/5`}
-              {activeStep === 2 && 'Editorial Bento'}
-              {activeStep === 3 && (isVi ? 'Studio PDF · FF&E' : 'Studio PDF · FF&E')}
+              {activeStep === 0 && 'Mosa Clipper'}
+              {activeStep === 1 && (isVi ? `Nhận diện · ${scannedCount}/5` : `Organizing · ${scannedCount}/5`)}
+              {activeStep === 2 && (isVi ? 'Bento Tạp chí' : 'Editorial Bento')}
+              {activeStep === 3 && (isVi ? 'Bản trình bày' : 'Studio Deck')}
             </span>
           </div>
         </div>
@@ -492,13 +492,13 @@ export const InteractiveDemoStage: React.FC<InteractiveDemoStageProps> = ({
             <div className="ld-hud-copy">
               <strong>
                 {isVi
-                  ? `Đã lưu ${clippedCount}/5 ảnh gốc · pinterest.com`
-                  : `Clipped ${clippedCount}/5 originals · pinterest.com`}
+                  ? `Đã lưu ${clippedCount}/5 hình ảnh · pinterest.com`
+                  : `Saved ${clippedCount}/5 visuals · pinterest.com`}
               </strong>
               <span>
                 {isVi
-                  ? 'Tự nâng cấp /originals/ · Không lỗi CORS'
-                  : 'Auto /originals/ upgrade · CORS-free'}
+                  ? 'Giữ nguyên độ phân giải sắc nét & đường dẫn nguồn'
+                  : 'Full image quality & original source link preserved'}
               </span>
             </div>
             <span className="ld-hud-ok">✓</span>
@@ -520,12 +520,14 @@ export const InteractiveDemoStage: React.FC<InteractiveDemoStageProps> = ({
             </div>
             <div className="ld-hud-copy">
               <strong>
-                Xenova/clip-vit-base-patch32 · {scannedCount}/5
+                {isVi
+                  ? `Nhận diện 6 yếu tố thiết kế · ${scannedCount}/5`
+                  : `6 visual design elements · ${scannedCount}/5`}
               </strong>
               <span>
                 {isVi
-                  ? 'Đang chạy cục bộ WASM · 0 byte gửi lên đám mây'
-                  : 'Running locally via WASM · 0 bytes uploaded'}
+                  ? 'Xử lý hoàn toàn riêng tư ngay trên máy của bạn'
+                  : 'Processed privately right on your device'}
               </span>
             </div>
           </div>
@@ -534,7 +536,9 @@ export const InteractiveDemoStage: React.FC<InteractiveDemoStageProps> = ({
           <div className={`ld-demo-handoff-card ${handoffOpen ? 'is-shown' : ''}`}>
             <div className="ld-handoff-head">
               <div>
-                <span className="ld-handoff-eyebrow">WHITE-LABEL STUDIO DECK</span>
+                <span className="ld-handoff-eyebrow">
+                  {isVi ? 'BẢN TRÌNH BÀY KHÁCH HÀNG' : 'CLIENT PRESENTATION'}
+                </span>
                 <h4>Mosa Interior Studio · MS-2026-01</h4>
               </div>
               <span className={`ld-handoff-approved ${clientApproved ? 'is-stamped' : ''}`}>

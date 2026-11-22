@@ -22,6 +22,7 @@ import {
 import { computeCardsBounds } from '../../domain/geometry';
 import { resolveAssetUrl } from '../../storage/workspaceRepository';
 import type { I18nDict } from '../../i18n';
+import { AppleSelect } from '../../components/AppleSelect';
 
 interface ProjectHubOverlayProps {
   open: boolean;
@@ -473,15 +474,17 @@ export const ProjectHubOverlay: React.FC<ProjectHubOverlayProps> = ({
                             />
                           </div>
                           <div className="hub-edit-row">
-                            <select
-                              className="input-sm"
+                            <AppleSelect<ProjectStatus>
+                              size="sm"
+                              className="flex-1"
                               value={editStatus}
-                              onChange={(e) => setEditStatus(e.target.value as ProjectStatus)}
-                            >
-                              <option value="draft">{dict.homeStatusDraft}</option>
-                              <option value="review">{dict.homeStatusReview}</option>
-                              <option value="approved">{dict.homeStatusApproved}</option>
-                            </select>
+                              options={[
+                                { value: 'draft', label: dict.homeStatusDraft, dotColor: '#8E8E93' },
+                                { value: 'review', label: dict.homeStatusReview, dotColor: '#FF9500' },
+                                { value: 'approved', label: dict.homeStatusApproved, dotColor: '#34C759' },
+                              ]}
+                              onChange={(st) => setEditStatus(st)}
+                            />
                             <button type="submit" className="btn-xs btn-primary">
                               <Check size={13} />
                             </button>

@@ -23,6 +23,7 @@ import {
 import { CATEGORY_ORDER, type Card, type Category } from '../../domain/types';
 import { isValidHttpUrl, normalizeHex } from '../../domain/validate';
 import { getCategoryLabel, type I18nDict } from '../../i18n';
+import { AppleSelect, CATEGORY_DOT_COLORS } from '../../components/AppleSelect';
 
 interface InspectorPanelProps {
   card: Card;
@@ -173,22 +174,19 @@ export const InspectorPanel: React.FC<InspectorPanelProps> = ({
         </label>
 
         {card.kind !== 'frame' && (
-          <label className="field">
+          <div className="field">
             <span className="field-label">{dict.categoryLabel}</span>
-            <select
-              className="input-sm"
+            <AppleSelect<Category>
+              ariaLabel={dict.categoryLabel}
               value={card.category}
-              onChange={(e) =>
-                onChangeCard(card.id, { category: e.target.value as Category }, true)
-              }
-            >
-              {CATEGORY_ORDER.map((cat) => (
-                <option key={cat} value={cat}>
-                  {getCategoryLabel(dict, cat)}
-                </option>
-              ))}
-            </select>
-          </label>
+              options={CATEGORY_ORDER.map((cat) => ({
+                value: cat,
+                label: getCategoryLabel(dict, cat),
+                dotColor: CATEGORY_DOT_COLORS[cat],
+              }))}
+              onChange={(category) => onChangeCard(card.id, { category }, true)}
+            />
+          </div>
         )}
 
         {/* Color-specific HEX field */}

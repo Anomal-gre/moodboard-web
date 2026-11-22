@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import type { Card, ProjectView } from '../domain/types';
+import type { Card, NavigationMode, ProjectView } from '../domain/types';
 import {
   clampZoom,
   computeCardsBounds,
@@ -16,6 +16,7 @@ import {
   type SmartGuideLine,
   type SmartSpacingGuide,
 } from '../domain/geometry';
+import { classifyWheelEvent, createWheelGestureState } from './wheelNavigation';
 
 export interface DragDraft {
   mode: 'move' | 'sticky-move' | 'resize' | 'pan' | 'lasso';
@@ -47,6 +48,7 @@ interface UseBoardInteractionsArgs {
   presentMode: boolean;
   editingCardId: string | null;
   modalOpen: boolean;
+  navigationMode?: NavigationMode;
   onViewChange: (view: ProjectView, commit?: boolean) => void;
   onSelectChange: (ids: string[]) => void;
   onCommitCards: (cards: Card[]) => void;
@@ -66,6 +68,7 @@ export function useBoardInteractions({
   presentMode,
   editingCardId,
   modalOpen,
+  navigationMode = 'auto',
   onViewChange,
   onSelectChange,
   onCommitCards,
@@ -81,6 +84,15 @@ export function useBoardInteractions({
   const suppressNextClickRef = useRef(false);
   const lastPointerScreenRef = useRef<Point | null>(null);
   const lastCardDownTimeRef = useRef<number>(0);
+  const wheelGestureRef = useRef(createWheelGestureState());
+  const navigationModeRef = useRef<NavigationMode>(navigationMode);
+  navigationModeRef.current = navigationMode;
+  const activeTouchesRef = useRef<Map<number, Point>>(new Map());
+  const touchPinchRef = useRef<{
+    startDist: number;
+    startMid: Point;
+    startView: ProjectView;
+  } | null>(null);
 
   const cardsRef = useRef(cards);
   cardsRef.current = cards;
@@ -234,8 +246,8 @@ export function useBoardInteractions({
     };
   }, [cancelDraft, editingCardId, modalOpen]);
 
-  // Mouse wheel direct cursor-anchored zoom (PureRef / CAD style); Shift+wheel pans horizontally.
-  // Attached on window so it never misses mount when App finishes async IndexedDB boot (loading -> false).
+  // Native Touchpad (2-finger 2D pan + pinch-to-zoom) & Mouse Wheel (cursor-anchored zoom).
+  // Also handles Safari/WebKit gesturestart/gesturechange so macOS trackpad pinch never zooms the page.
   useEffect(() => {
     const onWheel = (e: WheelEvent) => {
       if (modalOpen) return;
@@ -248,28 +260,81 @@ export function useBoardInteractions({
       const curView = viewRef.current;
       const screenPt = getBoardRelativePoint(e.clientX, e.clientY);
 
-      if (e.shiftKey && !e.ctrlKey && !e.metaKey) {
+      const action = classifyWheelEvent(
+        {
+          deltaX: e.deltaX,
+          deltaY: e.deltaY,
+          deltaMode: e.deltaMode,
+          ctrlKey: e.ctrlKey,
+          metaKey: e.metaKey,
+          shiftKey: e.shiftKey,
+          timestamp: e.timeStamp || performance.now(),
+        },
+        navigationModeRef.current,
+        wheelGestureRef.current
+      );
+
+      if (action.type === 'pan') {
         onViewChange(
           {
             ...curView,
-            x: curView.x - (e.deltaX || e.deltaY),
-            y: curView.y,
+            x: curView.x - action.dx,
+            y: curView.y - action.dy,
           },
           true
         );
         return;
       }
 
-      const delta = e.deltaY;
-      if (delta === 0) return;
-      const intensity = e.ctrlKey || e.metaKey ? 0.0022 : 0.0012;
-      const zoomFactor = Math.min(1.22, Math.max(0.82, Math.exp(-delta * intensity)));
-      const nextZoom = clampZoom(curView.zoom * zoomFactor);
-      const nextView = zoomAtScreenPoint(curView, screenPt, nextZoom);
-      onViewChange(nextView, true);
+      if (action.type === 'zoom') {
+        const nextZoom = clampZoom(curView.zoom * action.zoomFactor);
+        const nextView = zoomAtScreenPoint(curView, screenPt, nextZoom);
+        onViewChange(nextView, true);
+      }
     };
+
+    // Safari / WebKit native trackpad pinch gestures
+    let gestureStartView: ProjectView | null = null;
+    const onGestureStart = (e: Event) => {
+      if (modalOpen) return;
+      const el = boardRef.current;
+      const target = e.target as Node | null;
+      if (!el || !target || !el.contains(target)) return;
+      e.preventDefault();
+      gestureStartView = { ...viewRef.current };
+    };
+    const onGestureChange = (e: Event) => {
+      if (modalOpen || !gestureStartView) return;
+      const ge = e as Event & { scale?: number; clientX?: number; clientY?: number };
+      e.preventDefault();
+      const scale = typeof ge.scale === 'number' && ge.scale > 0 ? ge.scale : 1;
+      const screenPt =
+        typeof ge.clientX === 'number' && typeof ge.clientY === 'number'
+          ? getBoardRelativePoint(ge.clientX, ge.clientY)
+          : lastPointerScreenRef.current ?? {
+              x: (boardRef.current?.clientWidth ?? 1200) / 2,
+              y: (boardRef.current?.clientHeight ?? 800) / 2,
+            };
+      const nextZoom = clampZoom(gestureStartView.zoom * scale);
+      onViewChange(zoomAtScreenPoint(gestureStartView, screenPt, nextZoom), false);
+    };
+    const onGestureEnd = (e: Event) => {
+      if (!gestureStartView) return;
+      e.preventDefault();
+      gestureStartView = null;
+      onViewChange({ ...viewRef.current }, true);
+    };
+
     window.addEventListener('wheel', onWheel, { passive: false });
-    return () => window.removeEventListener('wheel', onWheel);
+    window.addEventListener('gesturestart', onGestureStart, { passive: false });
+    window.addEventListener('gesturechange', onGestureChange, { passive: false });
+    window.addEventListener('gestureend', onGestureEnd, { passive: false });
+    return () => {
+      window.removeEventListener('wheel', onWheel);
+      window.removeEventListener('gesturestart', onGestureStart);
+      window.removeEventListener('gesturechange', onGestureChange);
+      window.removeEventListener('gestureend', onGestureEnd);
+    };
   }, [boardRef, getBoardRelativePoint, modalOpen, onViewChange]);
 
   const startPan = useCallback(
@@ -308,6 +373,24 @@ export function useBoardInteractions({
           cancelDraft();
         }
         return;
+      }
+
+      if (e.pointerType === 'touch') {
+        const pt = getBoardRelativePoint(e.clientX, e.clientY);
+        activeTouchesRef.current.set(e.pointerId, pt);
+        if (activeTouchesRef.current.size === 2) {
+          cancelDraft();
+          const pts = Array.from(activeTouchesRef.current.values());
+          const startDist = Math.max(12, Math.hypot(pts[1].x - pts[0].x, pts[1].y - pts[0].y));
+          const startMid = { x: (pts[0].x + pts[1].x) / 2, y: (pts[0].y + pts[1].y) / 2 };
+          touchPinchRef.current = {
+            startDist,
+            startMid,
+            startView: { ...viewRef.current },
+          };
+          e.preventDefault();
+          return;
+        }
       }
 
       if (e.button === 1 || spacePressed || presentMode) {
@@ -388,6 +471,24 @@ export function useBoardInteractions({
           cancelDraft();
         }
         return;
+      }
+
+      if (e.pointerType === 'touch') {
+        const pt = getBoardRelativePoint(e.clientX, e.clientY);
+        activeTouchesRef.current.set(e.pointerId, pt);
+        if (activeTouchesRef.current.size === 2) {
+          cancelDraft();
+          const pts = Array.from(activeTouchesRef.current.values());
+          const startDist = Math.max(12, Math.hypot(pts[1].x - pts[0].x, pts[1].y - pts[0].y));
+          const startMid = { x: (pts[0].x + pts[1].x) / 2, y: (pts[0].y + pts[1].y) / 2 };
+          touchPinchRef.current = {
+            startDist,
+            startMid,
+            startView: { ...viewRef.current },
+          };
+          e.preventDefault();
+          return;
+        }
       }
 
       if (e.button === 1 || spacePressed || presentMode) {
@@ -488,6 +589,27 @@ export function useBoardInteractions({
     (e: React.PointerEvent<HTMLDivElement>) => {
       const curScreen = getBoardRelativePoint(e.clientX, e.clientY);
       lastPointerScreenRef.current = curScreen;
+
+      if (e.pointerType === 'touch' && activeTouchesRef.current.has(e.pointerId)) {
+        activeTouchesRef.current.set(e.pointerId, curScreen);
+        if (activeTouchesRef.current.size === 2 && touchPinchRef.current) {
+          const pts = Array.from(activeTouchesRef.current.values());
+          const curDist = Math.max(12, Math.hypot(pts[1].x - pts[0].x, pts[1].y - pts[0].y));
+          const curMid = { x: (pts[0].x + pts[1].x) / 2, y: (pts[0].y + pts[1].y) / 2 };
+          const pinch = touchPinchRef.current;
+          const nextZoom = clampZoom(pinch.startView.zoom * (curDist / pinch.startDist));
+          const zoomed = zoomAtScreenPoint(pinch.startView, pinch.startMid, nextZoom);
+          onViewChange(
+            {
+              ...zoomed,
+              x: zoomed.x + (curMid.x - pinch.startMid.x),
+              y: zoomed.y + (curMid.y - pinch.startMid.y),
+            },
+            false
+          );
+          return;
+        }
+      }
 
       const cur = draftRef.current;
       if (!cur) return;
@@ -626,6 +748,15 @@ export function useBoardInteractions({
 
   const handlePointerUp = useCallback(
     (e: React.PointerEvent<HTMLDivElement>) => {
+      if (e.pointerType === 'touch') {
+        activeTouchesRef.current.delete(e.pointerId);
+        if (touchPinchRef.current && activeTouchesRef.current.size < 2) {
+          touchPinchRef.current = null;
+          onViewChange({ ...viewRef.current }, true);
+          return;
+        }
+      }
+
       const cur = draftRef.current;
       if (!cur) return;
       // Sticky-move commits on pointerDown, not pointerUp
@@ -703,6 +834,8 @@ export function useBoardInteractions({
   );
 
   const handlePointerCancel = useCallback(() => {
+    activeTouchesRef.current.clear();
+    touchPinchRef.current = null;
     if (draftRef.current?.mode === 'sticky-move') return;
     cancelDraft();
   }, [cancelDraft]);
