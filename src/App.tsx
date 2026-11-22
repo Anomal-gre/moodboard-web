@@ -124,9 +124,7 @@ const ExportModal = lazy(() =>
 const BackupModal = lazy(() =>
   import('./features/export/BackupModal').then((m) => ({ default: m.BackupModal }))
 );
-const LandingPage = lazy(() =>
-  import('./features/landing/LandingPage').then((m) => ({ default: m.LandingPage }))
-);
+import { LandingPage } from './features/landing/LandingPage';
 const OnboardingModal = lazy(() =>
   import('./features/landing/OnboardingModal').then((m) => ({ default: m.OnboardingModal }))
 );
@@ -358,11 +356,12 @@ export const App: React.FC = () => {
   }, [language, dict.pageTitle]);
 
   useEffect(() => {
-    document.documentElement.classList.toggle('theme-dark', darkTheme);
-    document.documentElement.style.colorScheme = darkTheme ? 'dark' : 'light';
+    const effectiveDark = darkTheme && !landingOpen;
+    document.documentElement.classList.toggle('theme-dark', effectiveDark);
+    document.documentElement.style.colorScheme = effectiveDark ? 'dark' : 'light';
 
     // Sync OS / Edge --app / PWA Window Title Bar color dynamically with Light/Dark mode
-    const titleBarColor = darkTheme ? '#1c1c1e' : '#f2f2f7';
+    const titleBarColor = landingOpen ? '#ffffff' : effectiveDark ? '#1c1c1e' : '#f2f2f7';
     let metaTheme = document.querySelector<HTMLMetaElement>('meta[name="theme-color"]');
     if (!metaTheme) {
       metaTheme = document.createElement('meta');
@@ -374,7 +373,7 @@ export const App: React.FC = () => {
     return () => {
       document.documentElement.classList.remove('theme-dark');
     };
-  }, [darkTheme]);
+  }, [darkTheme, landingOpen]);
 
   useEffect(() => {
     document.documentElement.lang = language;
@@ -2636,6 +2635,38 @@ export const App: React.FC = () => {
     return dimmed;
   }, [activeProject, boardFilter, duplicateIds]);
 
+  // Render Landing Page immediately on root `/` without waiting for IndexedDB or mounting the canvas behind it (zero flash!)
+  if (landingOpen) {
+    const hasExistingWorkspace =
+      Boolean(meta?.onboardingCompleted) ||
+      projects.length > 1 ||
+      (activeProject?.revision ?? 0) > 0 ||
+      (Boolean(activeProject) && activeProject.id !== 'proj_sample_living_01');
+    return (
+      <>
+        <LandingPage
+          dict={dict}
+          language={language}
+          hasExistingWorkspace={hasExistingWorkspace}
+          onChangeLanguage={handleChangeLanguage}
+          onStartOnboarding={() => setOnboardingOpen(true)}
+          onEnterCanvasDirectly={handleEnterCanvasDirectly}
+        />
+        <Suspense fallback={null}>
+          {onboardingOpen && (
+            <OnboardingModal
+              open={onboardingOpen}
+              dict={dict}
+              language={language}
+              onSkip={handleEnterCanvasDirectly}
+              onComplete={handleCompleteOnboarding}
+            />
+          )}
+        </Suspense>
+      </>
+    );
+  }
+
   if (loading) {
     return (
       <div className="fatal-screen">
@@ -3396,32 +3427,6 @@ export const App: React.FC = () => {
             onDeleteProject={(id) => void handleDeleteProject(id)}
             onExportMosaFile={(p) => void handleExportMosaFileQuick(p)}
             onOpenMosaFile={() => void handleOpenMosaFileQuick()}
-          />
-        )}
-
-        {landingOpen && (
-          <LandingPage
-            dict={dict}
-            language={language}
-            hasExistingWorkspace={
-              Boolean(meta?.onboardingCompleted) ||
-              projects.length > 1 ||
-              (activeProject.revision ?? 0) > 0 ||
-              activeProject.id !== 'proj_sample_living_01'
-            }
-            onChangeLanguage={handleChangeLanguage}
-            onStartOnboarding={() => setOnboardingOpen(true)}
-            onEnterCanvasDirectly={handleEnterCanvasDirectly}
-          />
-        )}
-
-        {onboardingOpen && (
-          <OnboardingModal
-            open={onboardingOpen}
-            dict={dict}
-            language={language}
-            onSkip={handleEnterCanvasDirectly}
-            onComplete={handleCompleteOnboarding}
           />
         )}
       </Suspense>
