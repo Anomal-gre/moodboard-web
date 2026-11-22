@@ -435,6 +435,7 @@ export const en: I18nDict = {
   landingNavDemo: '30s Demo',
   landingNavFeatures: 'Features',
   landingNavCompare: 'Compare',
+  landingNavInstall: 'Install',
   landingNavPrivacy: 'Privacy',
   landingCtaTryNow: 'Try it now',
   landingCtaResume: 'Open Workspace',
@@ -531,6 +532,28 @@ export const en: I18nDict = {
 
   landingClosingTitle: 'Ready for your next moodboard?',
   landingClosingSubtitle: 'Start right in your browser — no install, no sign-up, no lock-in.',
+  landingInstallEyebrow: 'Flexible Setup · One Unified Workspace',
+  landingInstallTitle: 'Run instantly on Web, or install as a 1-click Desktop App.',
+  landingInstallSubtitle:
+    'The Web app and installed Desktop App (PWA) share the exact same local IndexedDB storage — zero sync drift, zero duplicate boards.',
+  landingInstallCard1Badge: 'Instant · 2 seconds',
+  landingInstallCard1Title: 'Use in Browser',
+  landingInstallCard1Desc:
+    'Launch directly in Chrome, Edge, Vivaldi, or Safari — 100% local storage on your device with no account required.',
+  landingInstallCard2Badge: '100% Shared Data',
+  landingInstallCard2Title: '1-Click Desktop App (PWA)',
+  landingInstallCard2Desc:
+    'Creates a standalone Mosa icon & distraction-free desktop window — automatically shares every board, asset & Web Clipper inbox with Web.',
+  landingInstallPwaBtn: 'Install Desktop App',
+  landingInstallPwaInstalled: 'Desktop App Installed ✓',
+  landingInstallPwaManualHint:
+    'Click the Install (⊕) icon in your browser address bar (Chrome / Edge / Vivaldi) or Share → Add to Dock / Home Screen.',
+  landingInstallCard3Badge: 'Extension · CORS-Free',
+  landingInstallCard3Title: 'Mosa Web Clipper',
+  landingInstallCard3Desc:
+    'Capture full-resolution images from Pinterest, Behance & ArchDaily straight into both Web and Desktop App windows.',
+  landingInstallSyncNote:
+    'Switching machines or browsers? Enable Local .mosa Folder Sync in Settings to auto-save directly into Google Drive, iCloud, or OneDrive.',
   landingFooterNote: 'Mosa · Local-First AI Moodboard Workspace · Built for Say AI Ambassador 2026',
 
   // Onboarding Modal (2 steps)

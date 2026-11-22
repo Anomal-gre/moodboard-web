@@ -7,13 +7,16 @@ import {
   FileArchive,
   FileSpreadsheet,
   FolderSync,
+  Globe,
   HardDrive,
   LayoutGrid,
   Link2,
   Lock,
   Minus,
+  MonitorDown,
   Play,
   Puzzle,
+  RefreshCw,
   ShieldCheck,
   WifiOff,
   X,
@@ -21,6 +24,7 @@ import {
 import type { I18nDict } from '../../i18n';
 import { formatBytesMb, getStorageHealth, type StorageHealthReport } from '../../storage/storageHealth';
 import { InteractiveDemoStage } from './InteractiveDemoStage';
+import { usePwaInstall } from './usePwaInstall';
 import './landing.css';
 
 interface LandingPageProps {
@@ -48,6 +52,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({
   const [storageReport, setStorageReport] = useState<StorageHealthReport | null>(null);
   const [scrollPct, setScrollPct] = useState(0);
   const [storageInView, setStorageInView] = useState(false);
+  const pwa = usePwaInstall();
 
   useEffect(() => {
     let alive = true;
@@ -245,6 +250,9 @@ export const LandingPage: React.FC<LandingPageProps> = ({
             </button>
             <button type="button" onClick={() => scrollToSection('compare')}>
               {dict.landingNavCompare}
+            </button>
+            <button type="button" onClick={() => scrollToSection('install')}>
+              {dict.landingNavInstall}
             </button>
             <button type="button" onClick={() => scrollToSection('privacy')}>
               {dict.landingNavPrivacy}
@@ -545,8 +553,123 @@ export const LandingPage: React.FC<LandingPageProps> = ({
         </div>
       </section>
 
+      {/* Flexible Hybrid Setup & Unified Local Sync Section */}
+      <section id="install" className="ld-section">
+        <div className="ld-container">
+          <div className="ld-section-head ld-reveal" data-reveal="section">
+            <span className="ld-section-eyebrow">{dict.landingInstallEyebrow}</span>
+            <h2 className="ld-section-title">{dict.landingInstallTitle}</h2>
+            <p className="ld-section-desc">{dict.landingInstallSubtitle}</p>
+          </div>
+
+          <div className="ld-install-grid">
+            {/* Card 1: Instant Web App */}
+            <article
+              className="ld-install-card ld-reveal"
+              data-reveal="card"
+              style={{ '--rd': '0ms' } as React.CSSProperties}
+            >
+              <div>
+                <div className="ld-install-top">
+                  <span className="ld-bento-icon-wrap">
+                    <Globe size={20} />
+                  </span>
+                  <span className="ld-install-badge">{dict.landingInstallCard1Badge}</span>
+                </div>
+                <h3>{dict.landingInstallCard1Title}</h3>
+                <p>{dict.landingInstallCard1Desc}</p>
+              </div>
+              <div className="ld-install-action">
+                <button
+                  type="button"
+                  className="ld-btn ld-btn--glass ld-btn--sm ld-btn--block"
+                  onClick={handlePrimaryCta}
+                >
+                  <span>{primaryCtaLabel}</span>
+                  <ArrowRight size={14} />
+                </button>
+              </div>
+            </article>
+
+            {/* Card 2: 1-Click Desktop App (PWA — 100% Shared Data) */}
+            <article
+              className="ld-install-card ld-install-card--featured ld-reveal"
+              data-reveal="card"
+              style={{ '--rd': '90ms' } as React.CSSProperties}
+            >
+              <div>
+                <div className="ld-install-top">
+                  <span className="ld-bento-icon-wrap ld-bento-icon-wrap--blue">
+                    <MonitorDown size={20} />
+                  </span>
+                  <span className="ld-install-badge ld-install-badge--accent">
+                    <RefreshCw size={11} />
+                    <span>{dict.landingInstallCard2Badge}</span>
+                  </span>
+                </div>
+                <h3>{dict.landingInstallCard2Title}</h3>
+                <p>{dict.landingInstallCard2Desc}</p>
+              </div>
+              <div className="ld-install-action">
+                <button
+                  type="button"
+                  className={`ld-btn ld-btn--sm ld-btn--block ${
+                    pwa.status === 'installed' ? 'ld-btn--installed' : 'ld-btn--primary'
+                  }`}
+                  onClick={() => void pwa.triggerInstall()}
+                  disabled={pwa.status === 'installed'}
+                >
+                  <MonitorDown size={14} />
+                  <span>
+                    {pwa.status === 'installed'
+                      ? dict.landingInstallPwaInstalled
+                      : dict.landingInstallPwaBtn}
+                  </span>
+                </button>
+                {pwa.status === 'manual-hint' && (
+                  <p className="ld-install-hint">{dict.landingInstallPwaManualHint}</p>
+                )}
+              </div>
+            </article>
+
+            {/* Card 3: Web Clipper Extension */}
+            <article
+              className="ld-install-card ld-reveal"
+              data-reveal="card"
+              style={{ '--rd': '180ms' } as React.CSSProperties}
+            >
+              <div>
+                <div className="ld-install-top">
+                  <span className="ld-bento-icon-wrap">
+                    <Puzzle size={20} />
+                  </span>
+                  <span className="ld-install-badge">{dict.landingInstallCard3Badge}</span>
+                </div>
+                <h3>{dict.landingInstallCard3Title}</h3>
+                <p>{dict.landingInstallCard3Desc}</p>
+              </div>
+              <div className="ld-install-action">
+                <a
+                  href={`${BASE}downloads/mosa-clipper.zip`}
+                  download="mosa-clipper.zip"
+                  className="ld-btn ld-btn--glass ld-btn--sm ld-btn--block"
+                >
+                  <Download size={14} />
+                  <span>{dict.clipperDownloadBtn}</span>
+                </a>
+              </div>
+            </article>
+          </div>
+
+          <div className="ld-sync-note ld-reveal" data-reveal="card" style={{ '--rd': '120ms' } as React.CSSProperties}>
+            <FolderSync size={16} />
+            <span>{dict.landingInstallSyncNote}</span>
+          </div>
+        </div>
+      </section>
+
       {/* Local-First Privacy & Live Storage Health Section */}
-      <section id="privacy" className="ld-section">
+      <section id="privacy" className="ld-section ld-section--tinted">
         <div className="ld-container">
           <div className="ld-section-head ld-reveal" data-reveal="section">
             <span className="ld-section-eyebrow">{dict.landingTrustEyebrow}</span>
@@ -613,14 +736,18 @@ export const LandingPage: React.FC<LandingPageProps> = ({
               <span>{primaryCtaLabel}</span>
               <ArrowRight size={17} />
             </button>
-            <a
-              href={`${BASE}downloads/mosa-clipper.zip`}
-              download="mosa-clipper.zip"
+            <button
+              type="button"
               className="ld-btn ld-btn--glass ld-btn--lg"
+              onClick={() => scrollToSection('install')}
             >
-              <Download size={16} />
-              <span>{dict.clipperDownloadBtn}</span>
-            </a>
+              <MonitorDown size={16} />
+              <span>
+                {pwa.status === 'installed'
+                  ? dict.landingInstallPwaInstalled
+                  : dict.landingInstallPwaBtn}
+              </span>
+            </button>
           </div>
         </div>
       </section>

@@ -463,6 +463,7 @@ export const vi = {
   landingNavDemo: 'Demo 30s',
   landingNavFeatures: 'Tính năng',
   landingNavCompare: 'So sánh',
+  landingNavInstall: 'Cài đặt',
   landingNavPrivacy: 'Quyền riêng tư',
   landingCtaTryNow: 'Dùng thử ngay',
   landingCtaResume: 'Vào Workspace',
@@ -559,6 +560,28 @@ export const vi = {
 
   landingClosingTitle: 'Sẵn sàng cho bản moodboard tiếp theo?',
   landingClosingSubtitle: 'Bắt đầu ngay trên trình duyệt — không cài đặt, không ràng buộc.',
+  landingInstallEyebrow: 'Cài đặt linh hoạt · Chung một kho dữ liệu',
+  landingInstallTitle: 'Dùng ngay trên Web, hoặc cài làm App Desktop 1-click.',
+  landingInstallSubtitle:
+    'Bản Web và App Desktop (PWA) dùng chung 100% dữ liệu IndexedDB trên trình duyệt của bạn — mở ở đâu cũng thấy đúng dự án mới nhất, không lo lệch hay tách đôi.',
+  landingInstallCard1Badge: 'Nhanh nhất · 2 giây',
+  landingInstallCard1Title: 'Dùng ngay trên trình duyệt',
+  landingInstallCard1Desc:
+    'Mở trực tiếp bằng Chrome, Edge, Vivaldi hoặc Safari — 100% dữ liệu lưu cục bộ trên máy, không cần tài khoản.',
+  landingInstallCard2Badge: 'Chung 100% dữ liệu',
+  landingInstallCard2Title: 'App Desktop 1-click (PWA)',
+  landingInstallCard2Desc:
+    'Tạo biểu tượng Mosa ngoài màn hình & cửa sổ riêng không thanh địa chỉ. Mọi thay đổi đồng bộ tức thì với bản Web & Web Clipper.',
+  landingInstallPwaBtn: 'Cài App về máy',
+  landingInstallPwaInstalled: 'Đã cài App trên máy ✓',
+  landingInstallPwaManualHint:
+    'Bấm biểu tượng Cài đặt (⊕) ở góc phải thanh địa chỉ (Chrome / Edge / Vivaldi) hoặc Chia sẻ → Thêm vào màn hình chính.',
+  landingInstallCard3Badge: 'Extension · Không lỗi CORS',
+  landingInstallCard3Title: 'Mosa Web Clipper',
+  landingInstallCard3Desc:
+    'Lưu ảnh độ phân giải gốc từ Pinterest, Behance, ArchDaily thẳng vào cả bản Web lẫn cửa sổ App Desktop.',
+  landingInstallSyncNote:
+    'Cần đồng bộ giữa 2 máy tính hoặc 2 trình duyệt khác nhau? Vào Cài đặt → Đồng bộ thư mục .mosa để tự động lưu vào Google Drive, iCloud hoặc OneDrive.',
   landingFooterNote: 'Mosa · Local-First AI Moodboard Workspace · Xây dựng cho Say AI Ambassador 2026',
 
   // Onboarding Modal (2 steps)

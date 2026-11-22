@@ -2276,3 +2276,142 @@
     transform: none !important;
   }
 }
+
+/* ==========================================================================
+   Hybrid Install & Unified Sync Section (#install)
+   ========================================================================== */
+.ld-install-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 18px;
+}
+
+.ld-install-card {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 20px;
+  padding: 26px;
+  border-radius: 24px;
+  background: var(--ld-card-muted);
+  border: 1px solid var(--ld-border);
+  transition:
+    transform 300ms cubic-bezier(0.22, 1, 0.36, 1),
+    box-shadow 300ms ease,
+    border-color 240ms ease,
+    opacity 680ms cubic-bezier(0.22, 1, 0.36, 1) var(--rd, 0ms);
+}
+
+.ld-install-card:hover {
+  transform: translate3d(0, -4px, 0);
+  box-shadow: 0 18px 40px rgba(0, 0, 0, 0.08);
+  border-color: rgba(0, 122, 255, 0.24);
+}
+
+.ld-install-card--featured {
+  background: linear-gradient(160deg, rgba(0, 122, 255, 0.08), #ffffff 78%);
+  border-color: rgba(0, 122, 255, 0.28);
+  box-shadow: 0 14px 36px rgba(0, 122, 255, 0.09);
+}
+
+.ld-install-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 14px;
+}
+
+.ld-install-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: var(--ld-card);
+  border: 1px solid var(--ld-border);
+  color: var(--ld-ink-muted);
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.ld-install-badge--accent {
+  background: var(--ld-accent-soft);
+  border-color: rgba(0, 122, 255, 0.2);
+  color: var(--ld-accent);
+}
+
+.ld-install-card h3 {
+  margin: 0;
+  font-family: var(--font-brand, 'Bricolage Grotesque', var(--font-sans));
+  font-size: 20px;
+  font-weight: 700;
+  letter-spacing: -0.025em;
+}
+
+.ld-install-card p {
+  margin: 8px 0 0;
+  font-size: 14px;
+  line-height: 1.55;
+  color: var(--ld-ink-muted);
+}
+
+.ld-install-action {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.ld-btn--block {
+  width: 100%;
+}
+
+.ld-btn--installed {
+  background: var(--ld-success-soft);
+  color: var(--ld-success);
+  padding: 8px 15px;
+  font-size: 13px;
+  cursor: default;
+}
+
+.ld-install-hint {
+  margin: 0 !important;
+  padding: 9px 11px;
+  border-radius: 12px;
+  background: rgba(0, 122, 255, 0.07);
+  border: 1px solid rgba(0, 122, 255, 0.16);
+  font-size: 12px !important;
+  line-height: 1.45 !important;
+  color: #1d1d1f !important;
+  animation: ldSummaryFade 260ms ease;
+}
+
+.ld-sync-note {
+  margin-top: 18px;
+  padding: 13px 18px;
+  border-radius: 16px;
+  background: var(--ld-card-muted);
+  border: 1px solid var(--ld-border);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  font-size: 13px;
+  color: var(--ld-ink-muted);
+  text-align: center;
+}
+
+.ld-sync-note svg {
+  color: var(--ld-accent);
+  flex-shrink: 0;
+}
+
+@media (max-width: 900px) {
+  .ld-install-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .ld-sync-note {
+    text-align: left;
+  }
+}
