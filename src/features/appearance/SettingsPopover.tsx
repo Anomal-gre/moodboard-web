@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { FolderSync, Settings } from 'lucide-react';
-import type { NavigationMode, ProjectAppearance } from '../../domain/types';
+import type { ProjectAppearance } from '../../domain/types';
 import { DEFAULT_DARK_BG, DEFAULT_LIGHT_BG } from '../../domain/project';
 import { normalizeHex } from '../../domain/validate';
 import type { I18nDict, Language } from '../../i18n';
@@ -10,12 +10,10 @@ interface SettingsPopoverProps {
   onOpenChange: (nextOpen: boolean) => void;
   appearance: ProjectAppearance;
   language: Language;
-  navigationMode: NavigationMode;
   syncFolderName?: string | null;
   dict: I18nDict;
   onChangeAppearance: (next: ProjectAppearance) => void;
   onChangeLanguage: (lang: Language) => void;
-  onChangeNavigationMode: (mode: NavigationMode) => void;
   onOpenStorageHub: () => void;
 }
 
@@ -24,12 +22,10 @@ export const SettingsPopover: React.FC<SettingsPopoverProps> = ({
   onOpenChange,
   appearance,
   language,
-  navigationMode,
   syncFolderName,
   dict,
   onChangeAppearance,
   onChangeLanguage,
-  onChangeNavigationMode,
   onOpenStorageHub,
 }) => {
   const [hexValue, setHexValue] = useState(appearance.background);
@@ -133,36 +129,6 @@ export const SettingsPopover: React.FC<SettingsPopoverProps> = ({
               onChange={(e) => onChangeAppearance({ ...appearance, grayscale: e.target.checked })}
             />
           </label>
-
-          <div className="popover-divider" />
-
-          <div className="field">
-            <span className="field-label">{dict.navModeLabel}</span>
-            <div className="seg-control">
-              <button
-                type="button"
-                className={`seg-btn ${navigationMode === 'auto' ? 'is-active' : ''}`}
-                onClick={() => onChangeNavigationMode('auto')}
-              >
-                {dict.navModeAuto}
-              </button>
-              <button
-                type="button"
-                className={`seg-btn ${navigationMode === 'trackpad' ? 'is-active' : ''}`}
-                onClick={() => onChangeNavigationMode('trackpad')}
-              >
-                {dict.navModeTrackpad}
-              </button>
-              <button
-                type="button"
-                className={`seg-btn ${navigationMode === 'mouse' ? 'is-active' : ''}`}
-                onClick={() => onChangeNavigationMode('mouse')}
-              >
-                {dict.navModeMouse}
-              </button>
-            </div>
-            <span className="muted-caption">{dict.navModeHint}</span>
-          </div>
 
           <div className="popover-divider" />
 
