@@ -387,10 +387,11 @@ function partitionByDesignerRole(cards: Card[], groupByCategory: boolean, seed: 
   const rolePriority: Record<Category, number> = {
     reference: 1,
     furniture: 2,
-    sketch: 3,
-    palette: 4,
-    material: 5,
-    other: 6,
+    typography: 3,
+    sketch: 4,
+    palette: 5,
+    material: 6,
+    other: 7,
   };
 
   let sortedImages = [...images].sort((a, b) => {
@@ -425,7 +426,7 @@ function partitionByDesignerRole(cards: Card[], groupByCategory: boolean, seed: 
       const rebuilt: Card[] = [lead];
       const catOrder = seed % 2 === 0
         ? CATEGORY_ORDER
-        : ['reference', 'furniture', 'material', 'sketch', 'palette', 'other'] as Category[];
+        : ['reference', 'furniture', 'typography', 'material', 'sketch', 'palette', 'other'] as Category[];
       for (const cat of catOrder) {
         const list = byCat.get(cat);
         if (list) rebuilt.push(...shuffleWithRng(list, rng));
@@ -1961,7 +1962,15 @@ function layoutConceptZones(
   const orderedCats =
     seed % 2 === 0
       ? CATEGORY_ORDER
-      : (['reference', 'material', 'furniture', 'palette', 'sketch', 'other'] as Category[]);
+      : ([
+          'reference',
+          'material',
+          'furniture',
+          'typography',
+          'palette',
+          'sketch',
+          'other',
+        ] as Category[]);
 
   for (const cat of orderedCats) {
     const catCards = cards.filter((c) => (zoneCatMap.get(c.id) ?? c.category) === cat);

@@ -7,6 +7,7 @@ const VALID_CATEGORIES = new Set<Category>([
   'palette',
   'material',
   'sketch',
+  'typography',
   'other',
 ]);
 

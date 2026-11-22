@@ -186,6 +186,10 @@ body {
   gap: 6px;
 }
 
+.cat-chip:first-child {
+  grid-column: span 2;
+}
+
 .cat-chip {
   height: 34px;
   padding: 0 10px;

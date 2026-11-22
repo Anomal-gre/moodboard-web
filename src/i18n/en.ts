@@ -69,11 +69,12 @@ export const en: I18nDict = {
   emptyBoardGuide: 'Drop an image, paste a link, or choose any file to add your first reference.',
   boardDropHint: 'Drop images, links or any files on the board',
 
-  cat_reference: 'Space / Architecture',
-  cat_furniture: 'Furniture',
-  cat_palette: 'Color Palette',
-  cat_material: 'Material',
-  cat_sketch: 'Sketch / Floor Plan',
+  cat_reference: 'Space & Mood',
+  cat_furniture: 'Form & Object',
+  cat_material: 'Texture & Surface',
+  cat_palette: 'Color & Palette',
+  cat_sketch: 'Line & Structure',
+  cat_typography: 'Typography',
   cat_other: 'Uncategorized',
 
   properties: 'Properties',
@@ -446,7 +447,7 @@ export const en: I18nDict = {
   landingHeroTitleLine1: 'Collect first. Arrange later.',
   landingHeroTitleLine2: 'Own every pixel.',
   landingHeroSubtitle:
-    'A fluid, studio-grade moodboard workspace for Interior & Creative Designers — with on-device CLIP AI classification, White-label Studio PDF, FF&E budgets, and real .mosa files.',
+    'A fluid, studio-grade moodboard workspace for every Designer & Creative — with on-device CLIP AI tuned to universal visual design elements, White-label Studio PDF, FF&E budgets, and real .mosa files.',
   landingTrustLine: 'No account required · 100% local storage · Free forever',
 
   landingDemoEyebrow: '30-Second Interactive Walkthrough',
@@ -463,7 +464,7 @@ export const en: I18nDict = {
   landingDemoStep2Label: '02 · On-Device CLIP',
   landingDemoStep2Title: 'Classify locally in your browser via WASM',
   landingDemoStep2Desc:
-    'On-device CLIP recognizes Spaces, Furniture, Materials, Palettes & Drawings with 0 bytes uploaded.',
+    'On-device CLIP recognizes 6 core design elements (Space, Form, Texture, Color, Line, Typography) with 0 bytes uploaded.',
   landingDemoStep3Label: '03 · Editorial Bento',
   landingDemoStep3Title: 'Auto-layout with connector clustering & palettes',
   landingDemoStep3Desc:
@@ -478,7 +479,7 @@ export const en: I18nDict = {
   landingBentoAiBadge: 'On-Device AI · Web Worker + WASM',
   landingBentoAiTitle: 'CLIP AI runs 100% on your machine.',
   landingBentoAiDesc:
-    'Classify dozens of interior & material images completely locally. Human-in-the-loop review lets you inspect confidence scores and adjust labels before applying with 1-step Undo.',
+    'Analyzes images across 6 universal design elements (Space, Form, Texture, Color, Line & Typography) completely locally so auto-layout elevates Hero visuals & tactile accents — with Human-in-the-loop review and 1-step Undo.',
   landingBentoAiStat1Label: 'Uploaded to cloud',
   landingBentoAiStat1Val: '0 bytes',
   landingBentoAiStat2Label: 'After first cache',

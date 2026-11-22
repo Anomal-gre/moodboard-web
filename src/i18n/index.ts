@@ -21,6 +21,8 @@ export function getCategoryLabel(dict: I18nDict, cat: Category): string {
       return dict.cat_material;
     case 'sketch':
       return dict.cat_sketch;
+    case 'typography':
+      return dict.cat_typography;
     default:
       return dict.cat_other;
   }

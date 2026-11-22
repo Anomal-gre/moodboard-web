@@ -6,6 +6,7 @@ export type Category =
   | 'palette'
   | 'material'
   | 'sketch'
+  | 'typography'
   | 'other';
 
 export type CaptureMethod =
@@ -185,19 +186,21 @@ export type SaveStatus = 'saved' | 'saving' | 'unsaved' | 'error' | 'conflict';
 export const CATEGORY_ORDER: Category[] = [
   'reference',
   'furniture',
-  'palette',
   'material',
+  'palette',
   'sketch',
+  'typography',
   'other',
 ];
 
 export const CATEGORY_PROMPTS: Record<Category, string> = {
-  reference: 'an interior room, architectural space or building',
-  furniture: 'an individual chair, table, sofa, lamp or piece of furniture',
-  palette: 'a color palette, paint swatches or color samples',
-  material: 'a close-up texture of wood, fabric, stone or tile',
-  sketch: 'an architectural floor plan, CAD drawing or hand-drawn sketch',
-  other: 'an unrelated photo, screenshot or graphic',
+  reference: 'a wide scene, architectural space, room environment, landscape or atmospheric mood photo',
+  furniture: 'a standalone 3D form, sculpted object, product design, furniture piece or fashion item',
+  material: 'a close-up material texture or surface pattern of wood, fabric, stone, paper, tile or metal',
+  palette: 'a color palette, paint swatches, color chips, gradient strip or flat color samples',
+  sketch: 'a line drawing, hand sketch, geometric shapes, floor plan, wireframe diagram or structural layout',
+  typography: 'typography design, bold lettering, typeface specimen, graphic poster with text, editorial magazine cover or wordmark logo',
+  other: 'a general reference photo, screenshot or miscellaneous visual note',
 };
 
 export interface BackupAssetEntry {

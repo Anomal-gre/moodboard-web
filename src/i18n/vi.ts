@@ -71,12 +71,13 @@ export const vi = {
   emptyBoardGuide: 'Thả ảnh, dán liên kết hoặc chọn bất kỳ tệp nào để đưa tư liệu đầu tiên lên bảng.',
   boardDropHint: 'Thả ảnh, liên kết hoặc tệp bất kỳ lên bảng',
 
-  // Categories
-  cat_reference: 'Công trình / Không gian',
-  cat_furniture: 'Đồ nội thất',
+  // Categories (Universal Visual Design Elements)
+  cat_reference: 'Không gian & Bối cảnh',
+  cat_furniture: 'Hình khối & Vật thể',
+  cat_material: 'Kết cấu & Bề mặt',
   cat_palette: 'Màu sắc',
-  cat_material: 'Vật liệu',
-  cat_sketch: 'Phác thảo / Mặt bằng',
+  cat_sketch: 'Đường nét & Cấu trúc',
+  cat_typography: 'Chữ & Typography',
   cat_other: 'Chưa phân loại',
 
   // Inspector & Source
@@ -474,7 +475,7 @@ export const vi = {
   landingHeroTitleLine1: 'Gom trước. Xếp sau.',
   landingHeroTitleLine2: 'Tự chủ tuyệt đối.',
   landingHeroSubtitle:
-    'Không gian moodboard siêu mượt cho Designer Nội thất & Sáng tạo — chạy AI CLIP phân loại ngay trên máy, xuất Studio PDF, dự toán FF&E và lưu tệp .mosa không phụ thuộc đám mây.',
+    'Không gian moodboard siêu mượt cho mọi Designer & Người làm sáng tạo — chạy AI CLIP nhận diện 6 yếu tố thiết kế ngay trên máy, xuất Studio PDF, dự toán FF&E và lưu tệp .mosa không phụ thuộc đám mây.',
   landingTrustLine: 'Không cần tài khoản · Lưu 100% trên máy · Miễn phí trọn đời',
 
   landingDemoEyebrow: 'Trải nghiệm 30 giây',
@@ -491,7 +492,7 @@ export const vi = {
   landingDemoStep2Label: '02 · AI CLIP cục bộ',
   landingDemoStep2Title: 'Phân loại thông minh ngay trên trình duyệt (WASM)',
   landingDemoStep2Desc:
-    'Mô hình CLIP nhận diện Không gian, Nội thất, Vật liệu, Bảng màu, Bản vẽ với 0 byte gửi ra ngoài.',
+    'Mô hình CLIP nhận diện 6 yếu tố thiết kế (Không gian, Hình khối, Kết cấu, Màu sắc, Đường nét, Chữ) với 0 byte gửi ra ngoài.',
   landingDemoStep3Label: '03 · Editorial Bento',
   landingDemoStep3Title: 'Tự sắp bố cục tạp chí, giữ cụm mũi tên liên kết',
   landingDemoStep3Desc:
@@ -506,7 +507,7 @@ export const vi = {
   landingBentoAiBadge: 'On-Device AI · Web Worker + WASM',
   landingBentoAiTitle: 'AI CLIP chạy 100% trên máy bạn.',
   landingBentoAiDesc:
-    'Phân loại hàng chục ảnh nội thất & vật liệu hoàn toàn cục bộ. Quy trình Human-in-the-loop cho xem trước điểm tin cậy, chỉnh tay nhãn trước khi áp dụng — hoàn tác chỉ 1 bước.',
+    'Phân tích hình ảnh theo 6 yếu tố thị giác phổ quát (Không gian, Hình khối, Kết cấu, Màu sắc, Đường nét, Chữ) hoàn toàn cục bộ để thuật toán bố cục tự chọn ảnh Hero & thẻ nhấn — duyệt trước khi áp dụng, hoàn tác 1 bước.',
   landingBentoAiStat1Label: 'Dữ liệu rời máy',
   landingBentoAiStat1Val: '0 byte',
   landingBentoAiStat2Label: 'Sau lần tải cache đầu',
