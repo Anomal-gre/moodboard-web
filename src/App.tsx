@@ -352,8 +352,8 @@ export const App: React.FC = () => {
 
   useEffect(() => {
     document.documentElement.lang = language;
-    document.title = dict.pageTitle;
-  }, [language, dict.pageTitle]);
+    document.title = landingOpen ? 'Mosa — Landing Page' : 'Mosa — Workspace';
+  }, [language, landingOpen]);
 
   useEffect(() => {
     const effectiveDark = darkTheme && !landingOpen;

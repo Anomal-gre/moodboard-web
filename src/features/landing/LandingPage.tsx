@@ -365,6 +365,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({
         <div className="ld-container">
           <div className="ld-section-head ld-reveal" data-reveal="section">
             <h2 className="ld-section-title">{dict.landingDemoTitle}</h2>
+            <p className="ld-section-desc">{dict.landingDemoSubtitle}</p>
           </div>
 
           <div className="ld-reveal" data-reveal="demo" style={{ '--rd': '80ms' } as React.CSSProperties}>
@@ -378,6 +379,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({
         <div className="ld-container">
           <div className="ld-section-head ld-reveal" data-reveal="section">
             <h2 className="ld-section-title">{dict.landingShowcaseTitle}</h2>
+            <p className="ld-section-desc">{dict.landingShowcaseSubtitle}</p>
           </div>
 
           <div className="ld-showcase-tabs ld-reveal" data-reveal="section" role="tablist">
@@ -533,6 +535,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({
         <div className="ld-container">
           <div className="ld-section-head ld-reveal" data-reveal="section">
             <h2 className="ld-section-title">{dict.landingFeaturesTitle}</h2>
+            <p className="ld-section-desc">{dict.landingFeaturesSubtitle}</p>
           </div>
 
           <div className="ld-bento-grid">
@@ -646,6 +649,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({
         <div className="ld-container">
           <div className="ld-section-head ld-reveal" data-reveal="section">
             <h2 className="ld-section-title">{dict.landingCompareTitle}</h2>
+            <p className="ld-section-desc">{dict.landingCompareSubtitle}</p>
           </div>
 
           <div
@@ -692,6 +696,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({
         <div className="ld-container">
           <div className="ld-section-head ld-reveal" data-reveal="section">
             <h2 className="ld-section-title">{dict.landingInstallTitle}</h2>
+            <p className="ld-section-desc">{dict.landingInstallSubtitle}</p>
           </div>
 
           <div className="ld-install-grid">
@@ -829,6 +834,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({
       <section className="ld-closing">
         <div className="ld-container ld-closing-inner ld-reveal" data-reveal="section">
           <h2>{dict.landingClosingTitle}</h2>
+          <p>{dict.landingClosingSubtitle}</p>
           <div className="ld-hero-ctas">
             <button type="button" className="ld-btn ld-btn--primary ld-btn--lg" onClick={handlePrimaryCta}>
               <span>{primaryCtaLabel}</span>
