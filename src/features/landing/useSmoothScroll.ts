@@ -43,8 +43,6 @@ export function useSmoothScroll({
     animDuration: SCROLL_DURATION_MS,
   });
 
-  const reducedMotionRef = useRef(false);
-
   const emitScroll = useCallback((el: HTMLElement, scrollTop: number, velocity: number) => {
     const maxScroll = Math.max(1, el.scrollHeight - el.clientHeight);
     onScrollRef.current?.(scrollTop, maxScroll, velocity);
@@ -132,7 +130,7 @@ export function useSmoothScroll({
       const clamped = Math.max(0, Math.min(maxScroll, targetY));
       const st = stateRef.current;
 
-      if (options?.immediate || reducedMotionRef.current) {
+      if (options?.immediate) {
         stopRaf();
         st.current = clamped;
         st.target = clamped;
@@ -173,17 +171,6 @@ export function useSmoothScroll({
     const el = containerRef.current;
     if (!el) return;
 
-    const mq =
-      typeof window !== 'undefined' && typeof window.matchMedia === 'function'
-        ? window.matchMedia('(prefers-reduced-motion: reduce)')
-        : null;
-    const syncReducedMotion = () => {
-      reducedMotionRef.current = Boolean(mq?.matches);
-      if (reducedMotionRef.current) stopRaf();
-    };
-    syncReducedMotion();
-    mq?.addEventListener?.('change', syncReducedMotion);
-
     const st = stateRef.current;
     st.current = el.scrollTop;
     st.target = el.scrollTop;
@@ -191,13 +178,11 @@ export function useSmoothScroll({
 
     if (disabled) {
       stopRaf();
-      return () => {
-        mq?.removeEventListener?.('change', syncReducedMotion);
-      };
+      return;
     }
 
     const onWheel = (e: WheelEvent) => {
-      if (reducedMotionRef.current || e.ctrlKey || e.metaKey) return;
+      if (e.ctrlKey || e.metaKey) return;
 
       // Allow horizontal scroll gestures (e.g. comparison table on narrow screens) to pass natively
       if (Math.abs(e.deltaX) > Math.abs(e.deltaY)) return;
@@ -269,7 +254,6 @@ export function useSmoothScroll({
       el.removeEventListener('scroll', onNativeScroll);
       el.removeEventListener('touchstart', onTouchStart);
       window.removeEventListener('keydown', onKeyDown);
-      mq?.removeEventListener?.('change', syncReducedMotion);
     };
   }, [containerRef, disabled, emitScroll, startRaf, stopRaf]);
 
