@@ -2651,6 +2651,7 @@ export const App: React.FC = () => {
           dict={dict}
           language={language}
           hasExistingWorkspace={hasExistingWorkspace}
+          scrollLocked={onboardingOpen}
           onChangeLanguage={handleChangeLanguage}
           onStartOnboarding={() => setOnboardingOpen(true)}
           onEnterCanvasDirectly={handleEnterCanvasDirectly}

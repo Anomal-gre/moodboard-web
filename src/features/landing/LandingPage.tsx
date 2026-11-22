@@ -23,12 +23,14 @@ import type { I18nDict } from '../../i18n';
 import { formatBytesMb, getStorageHealth, type StorageHealthReport } from '../../storage/storageHealth';
 import { InteractiveDemoStage } from './InteractiveDemoStage';
 import { usePwaInstall } from './usePwaInstall';
+import { useSmoothScroll } from './useSmoothScroll';
 import './landing.css';
 
 interface LandingPageProps {
   dict: I18nDict;
   language: 'vi' | 'en';
   hasExistingWorkspace: boolean;
+  scrollLocked?: boolean;
   onChangeLanguage: (lang: 'vi' | 'en') => void;
   onStartOnboarding: () => void;
   onEnterCanvasDirectly: () => void;
@@ -51,17 +53,38 @@ export const LandingPage: React.FC<LandingPageProps> = ({
   dict,
   language,
   hasExistingWorkspace,
+  scrollLocked = false,
   onChangeLanguage,
   onStartOnboarding,
   onEnterCanvasDirectly,
 }) => {
   const scrollRootRef = useRef<HTMLDivElement | null>(null);
+  const progressBarRef = useRef<HTMLDivElement | null>(null);
+  const navRef = useRef<HTMLElement | null>(null);
+  const heroBoardRef = useRef<HTMLDivElement | null>(null);
   const [storageReport, setStorageReport] = useState<StorageHealthReport | null>(null);
-  const [scrollPct, setScrollPct] = useState(0);
   const [storageInView, setStorageInView] = useState(false);
   const [showcaseTab, setShowcaseTab] = useState<ShowcasePresetId>('interior');
   const pwa = usePwaInstall();
   const isVi = language === 'vi';
+
+  const { scrollTo, scrollToElement } = useSmoothScroll({
+    containerRef: scrollRootRef,
+    disabled: scrollLocked,
+    onScroll: (scrollTop, maxScroll) => {
+      const ratio = Math.max(0, Math.min(1, scrollTop / Math.max(1, maxScroll)));
+      if (progressBarRef.current) {
+        progressBarRef.current.style.transform = `scaleX(${ratio})`;
+      }
+      if (navRef.current) {
+        navRef.current.classList.toggle('is-scrolled', scrollTop > 20);
+      }
+      if (heroBoardRef.current && scrollTop < 900) {
+        const shift = Math.min(22, scrollTop * 0.042);
+        heroBoardRef.current.style.transform = `translate3d(0, ${shift.toFixed(2)}px, 0)`;
+      }
+    },
+  });
 
   useEffect(() => {
     let alive = true;
@@ -75,31 +98,16 @@ export const LandingPage: React.FC<LandingPageProps> = ({
     };
   }, []);
 
-  // Scroll progress hairline & IntersectionObserver scroll-reveal choreography
+  // One-shot IntersectionObserver scroll-reveal choreography (anomal.ohwow.win 0.14 threshold)
   useEffect(() => {
     const root = scrollRootRef.current;
     if (!root) return;
-
-    let rafId = 0;
-    const onScroll = () => {
-      if (rafId) return;
-      rafId = window.requestAnimationFrame(() => {
-        rafId = 0;
-        const maxScroll = Math.max(1, root.scrollHeight - root.clientHeight);
-        setScrollPct(Math.max(0, Math.min(100, (root.scrollTop / maxScroll) * 100)));
-      });
-    };
-    root.addEventListener('scroll', onScroll, { passive: true });
-    onScroll();
 
     const targets = Array.from(root.querySelectorAll<HTMLElement>('[data-reveal]'));
     if (typeof IntersectionObserver === 'undefined') {
       targets.forEach((el) => el.classList.add('is-in-view'));
       setStorageInView(true);
-      return () => {
-        root.removeEventListener('scroll', onScroll);
-        if (rafId) window.cancelAnimationFrame(rafId);
-      };
+      return;
     }
 
     const observer = new IntersectionObserver(
@@ -115,21 +123,18 @@ export const LandingPage: React.FC<LandingPageProps> = ({
           }
         }
       },
-      { root, threshold: 0.1, rootMargin: '0px 0px -36px 0px' }
+      { root, threshold: 0.14, rootMargin: '0px 0px -24px 0px' }
     );
 
     targets.forEach((el) => observer.observe(el));
 
     return () => {
       observer.disconnect();
-      root.removeEventListener('scroll', onScroll);
-      if (rafId) window.cancelAnimationFrame(rafId);
     };
   }, []);
 
   const scrollToSection = (id: string) => {
-    const el = scrollRootRef.current?.querySelector(`#${id}`);
-    el?.scrollIntoView({ block: 'start' });
+    scrollToElement(`#${id}`, 68);
   };
 
   const primaryCtaLabel = hasExistingWorkspace ? dict.landingCtaResume : dict.landingCtaTryNow;
@@ -246,12 +251,12 @@ export const LandingPage: React.FC<LandingPageProps> = ({
   return (
     <div ref={scrollRootRef} className="ld-root">
       {/* Sticky Frosted Navigation */}
-      <header className="ld-nav">
+      <header ref={navRef} className="ld-nav">
         <div className="ld-nav-inner">
           <button
             type="button"
             className="ld-nav-brand"
-            onClick={() => scrollRootRef.current?.scrollTo({ top: 0 })}
+            onClick={() => scrollTo(0)}
           >
             <img src={`${BASE}brand/logo.svg`} alt="Mosa" width={24} height={24} />
             <span className="ld-nav-wordmark">Mosa</span>
@@ -304,7 +309,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({
           </div>
         </div>
         <div className="ld-scroll-progress" aria-hidden="true">
-          <div className="ld-scroll-progress-bar" style={{ width: `${scrollPct}%` }} />
+          <div ref={progressBarRef} className="ld-scroll-progress-bar" />
         </div>
       </header>
 
@@ -313,14 +318,18 @@ export const LandingPage: React.FC<LandingPageProps> = ({
         <div className="ld-container ld-hero-inner">
           <div className="ld-hero-copy">
             <h1 className="ld-hero-title">
-              <span className="ld-hero-enter" style={{ '--d': '40ms' } as React.CSSProperties}>
-                {dict.landingHeroTitleLine1}
+              <span className="ld-line-mask">
+                <span className="ld-line-inner" style={{ '--d': '40ms' } as React.CSSProperties}>
+                  {dict.landingHeroTitleLine1}
+                </span>
               </span>
-              <span
-                className="ld-hero-title-accent ld-hero-enter"
-                style={{ '--d': '130ms' } as React.CSSProperties}
-              >
-                {dict.landingHeroTitleLine2}
+              <span className="ld-line-mask">
+                <span
+                  className="ld-hero-title-accent ld-line-inner"
+                  style={{ '--d': '125ms' } as React.CSSProperties}
+                >
+                  {dict.landingHeroTitleLine2}
+                </span>
               </span>
             </h1>
             <p className="ld-hero-subtitle ld-hero-enter" style={{ '--d': '210ms' } as React.CSSProperties}>
@@ -347,14 +356,16 @@ export const LandingPage: React.FC<LandingPageProps> = ({
             </div>
           </div>
 
-          <div className="ld-hero-board ld-hero-enter" aria-hidden="true">
-            <img className="ld-hero-board-room" src={`${BASE}samples/living-room.jpg`} alt="" fetchPriority="high" />
-            <img src={`${BASE}samples/armchair.jpg`} alt="" />
-            <img src={`${BASE}samples/material-texture.jpg`} alt="" />
-            <div className="ld-hero-palette">
-              {MOODBOARD_PALETTE.map(({ hex }) => (
-                <span key={hex} style={{ backgroundColor: hex }} />
-              ))}
+          <div ref={heroBoardRef} className="ld-hero-board-parallax">
+            <div className="ld-hero-board ld-hero-enter" aria-hidden="true">
+              <img className="ld-hero-board-room" src={`${BASE}samples/living-room.jpg`} alt="" fetchPriority="high" />
+              <img src={`${BASE}samples/armchair.jpg`} alt="" />
+              <img src={`${BASE}samples/material-texture.jpg`} alt="" />
+              <div className="ld-hero-palette">
+                {MOODBOARD_PALETTE.map(({ hex }) => (
+                  <span key={hex} style={{ backgroundColor: hex }} />
+                ))}
+              </div>
             </div>
           </div>
         </div>

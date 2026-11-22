@@ -20,6 +20,8 @@
   --ld-nav-height: 64px;
   --ld-content-width: 1280px;
   --ld-gutter: clamp(18px, 4vw, 48px);
+  --ld-ease-expo: cubic-bezier(0.16, 1, 0.3, 1);
+  --ld-ease-quart: cubic-bezier(0.25, 1, 0.5, 1);
 
   position: fixed;
   inset: 0;
@@ -32,7 +34,8 @@
   color: var(--ld-ink);
   color-scheme: light;
   font-family: var(--font-sans);
-  scroll-behavior: smooth;
+  scroll-behavior: auto;
+  overscroll-behavior-y: contain;
   scroll-padding-block-start: calc(var(--ld-nav-height) + 16px);
   -webkit-font-smoothing: antialiased;
 }
@@ -57,6 +60,12 @@
   backdrop-filter: saturate(180%) blur(20px);
   -webkit-backdrop-filter: saturate(180%) blur(20px);
   border-bottom: 1px solid var(--ld-border);
+  transition: background-color 350ms ease, box-shadow 400ms var(--ld-ease-expo), border-color 350ms ease;
+}
+
+.ld-nav.is-scrolled {
+  background: rgba(252, 251, 248, 0.88);
+  box-shadow: 0 8px 28px rgba(37, 39, 32, 0.06);
 }
 
 .ld-nav-inner {
@@ -226,6 +235,11 @@
 
 .ld-btn svg {
   flex: none;
+  transition: transform 360ms var(--ld-ease-expo);
+}
+
+.ld-btn:hover svg.lucide-arrow-right {
+  transform: translateX(3px);
 }
 
 .ld-btn svg.lucide-play,
@@ -252,6 +266,10 @@
 
 .ld-hero-copy {
   min-width: 0;
+}
+
+.ld-hero-board-parallax {
+  will-change: transform;
 }
 
 .ld-hero-board {
@@ -2060,7 +2078,7 @@
    Apple-Grade Motion Choreography — Page Scroll, Bento Micro-Motion & 30s Film
    ========================================================================== */
 
-/* Top Scroll Reading Progress Hairline */
+/* Top Scroll Reading Progress Hairline (GPU scaleX, 0 layout reflows) */
 .ld-scroll-progress {
   position: absolute;
   left: 0;
@@ -2069,28 +2087,57 @@
   height: 2px;
   background: transparent;
   pointer-events: none;
+  overflow: hidden;
 }
 
 .ld-scroll-progress-bar {
+  width: 100%;
   height: 100%;
   background: var(--ld-accent);
-  transition: width 90ms linear;
+  transform-origin: left center;
+  transform: scaleX(0);
+  will-change: transform;
+}
+
+/* Masked Hero Line Reveal (anomal.ohwow.win signature expo curtain) */
+.ld-line-mask {
+  display: block;
+  overflow: hidden;
+  padding-bottom: 0.14em;
+  margin-bottom: -0.14em;
+}
+
+.ld-line-inner {
+  display: block;
+  animation: ldLineRise 920ms var(--ld-ease-expo) backwards;
+  animation-delay: var(--d, 0ms);
+}
+
+@keyframes ldLineRise {
+  0% {
+    opacity: 0;
+    transform: translate3d(0, 108%, 0);
+  }
+  100% {
+    opacity: 1;
+    transform: translate3d(0, 0, 0);
+  }
 }
 
 /* Hero entrance */
 .ld-hero-enter {
-  animation: ldHeroRise 420ms cubic-bezier(0.22, 1, 0.36, 1) backwards;
-  animation-delay: min(var(--d, 0ms), 150ms);
+  animation: ldHeroRise 780ms var(--ld-ease-expo) backwards;
+  animation-delay: var(--d, 0ms);
 }
 
 @keyframes ldHeroRise {
   0% {
     opacity: 0;
-    transform: translateY(8px);
+    transform: translate3d(0, 16px, 0);
   }
   100% {
     opacity: 1;
-    transform: translateY(0);
+    transform: translate3d(0, 0, 0);
   }
 }
 
@@ -2107,18 +2154,18 @@
   box-shadow: 0 0 0 0 rgba(90, 200, 250, 0.5);
 }
 
-/* Scroll-Triggered IntersectionObserver Reveals */
+/* Scroll-Triggered IntersectionObserver Reveals (anomal.ohwow.win 18px expo fade-up) */
 .ld-reveal {
   opacity: 0;
-  transform: translate3d(0, 28px, 0) scale(0.985);
+  transform: translate3d(0, 18px, 0);
   transition:
-    opacity 680ms cubic-bezier(0.22, 1, 0.36, 1) var(--rd, 0ms),
-    transform 720ms cubic-bezier(0.22, 1, 0.36, 1) var(--rd, 0ms);
+    opacity 800ms var(--ld-ease-expo) var(--rd, 0ms),
+    transform 860ms var(--ld-ease-expo) var(--rd, 0ms);
 }
 
 .ld-reveal.is-in-view {
   opacity: 1;
-  transform: translate3d(0, 0, 0) scale(1);
+  transform: translate3d(0, 0, 0);
 }
 
 .ld-reveal:focus-within {
@@ -2542,6 +2589,7 @@
   }
 
   .ld-hero-enter,
+  .ld-line-inner,
   .ld-gal-board,
   .ld-install-hint,
   .ld-mini-bento-art span,
@@ -2549,16 +2597,21 @@
     animation: none !important;
   }
 
-  .ld-reveal {
-    opacity: 1 !important;
+  .ld-hero-board-parallax {
     transform: none !important;
   }
 
-  .ld-root :is(.ld-btn, .ld-scroll-progress-bar, .ld-install-card, .ld-gal-photo) {
+  .ld-reveal {
+    opacity: 1 !important;
+    transform: none !important;
+    transition-duration: 0.01ms !important;
+  }
+
+  .ld-root :is(.ld-btn, .ld-btn svg, .ld-scroll-progress-bar, .ld-install-card, .ld-gal-photo, .ld-gal-photo img, .ld-clip-mini-preview img) {
     transition: none;
   }
 
-  .ld-root :is(.ld-btn:active, .ld-gal-photo:hover) {
+  .ld-root :is(.ld-btn:active, .ld-btn:hover svg, .ld-gal-photo:hover, .ld-gal-photo:hover img, .ld-bento-card:hover .ld-clip-mini-preview img) {
     transform: none;
   }
 }
@@ -2791,6 +2844,11 @@
   height: 100%;
   object-fit: cover;
   display: block;
+  transition: transform 600ms var(--ld-ease-expo);
+}
+
+.ld-gal-photo:hover img {
+  transform: scale(1.035);
 }
 
 .ld-gal-photo figcaption {
@@ -3093,6 +3151,11 @@
   height: 100%;
   object-fit: cover;
   display: block;
+  transition: transform 600ms var(--ld-ease-expo);
+}
+
+.ld-bento-card:hover .ld-clip-mini-preview img {
+  transform: scale(1.04);
 }
 
 .ld-clip-mini-pill {
