@@ -2,7 +2,7 @@
   "name": "Mosa",
   "short_name": "Mosa",
   "description": "Local-first AI moodboard for interior and visual designers",
-  "start_url": "./",
+  "start_url": "./#app",
   "scope": "./",
   "display": "standalone",
   "background_color": "#f2f2f7",

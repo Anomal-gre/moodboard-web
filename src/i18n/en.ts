@@ -131,7 +131,7 @@ export const en: I18nDict = {
   distributeV: 'Distribute vertically',
 
   appearanceTitle: 'Board Settings',
-  bgPresetLight: 'iOS Light',
+  bgPresetLight: 'Warm Paper',
   bgPresetDark: 'Studio Dark',
   bgCustomHex: 'Background HEX',
   dotGrid: 'Show dot grid',

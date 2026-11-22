@@ -175,6 +175,14 @@ function fitWorkspaceView(
   });
 }
 
+function isWorkspaceRoute(): boolean {
+  if (typeof window === 'undefined') return false;
+  const hash = window.location.hash.toLowerCase();
+  const params = new URLSearchParams(window.location.search);
+  if (params.get('home') === '1' || hash === '#home') return false;
+  return hash === '#app' || hash.startsWith('#app/');
+}
+
 export const App: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [storageFatal, setStorageFatal] = useState<string | null>(null);
@@ -219,7 +227,7 @@ export const App: React.FC = () => {
   const [exportOpen, setExportOpen] = useState(false);
   const [backupOpen, setBackupOpen] = useState(false);
   const [projectHubOpen, setProjectHubOpen] = useState(false);
-  const [landingOpen, setLandingOpen] = useState(false);
+  const [landingOpen, setLandingOpen] = useState(() => !isWorkspaceRoute());
   const [onboardingOpen, setOnboardingOpen] = useState(false);
   const [syncFolderHandle, setSyncFolderHandle] = useState<FsDirectoryHandle | null>(null);
   const [addLinkOpen, setAddLinkOpen] = useState(false);
@@ -285,17 +293,8 @@ export const App: React.FC = () => {
         setProjects([fittedProj]);
       }
 
-      // Show Apple-style Landing Page for first-time visitors (or when ?home=1 / #home is requested)
-      const params = new URLSearchParams(window.location.search);
-      const forceHome = params.get('home') === '1' || window.location.hash === '#home';
-      const hasExistingActivity =
-        Boolean(init.meta.onboardingCompleted) ||
-        init.projects.length > 1 ||
-        (init.activeProject.revision ?? 0) > 0 ||
-        init.activeProject.id !== 'proj_sample_living_01';
-      if (forceHome || !hasExistingActivity) {
-        setLandingOpen(true);
-      }
+      // Sync view with current URL route: root `/` shows Landing Page, `#app` stays in Canvas
+      setLandingOpen(!isWorkspaceRoute());
     } catch (err) {
       setStorageFatal(err instanceof Error ? err.message : 'Lỗi khởi tạo lưu trữ cục bộ.');
     } finally {
@@ -310,12 +309,23 @@ export const App: React.FC = () => {
     };
   }, [bootWorkspace]);
 
-  // Track window resize
+  // Track window resize & browser Back/Forward route sync between Landing (`/`) and Canvas (`#app`)
   useEffect(() => {
     const onResize = () =>
       setViewportSize({ width: window.innerWidth, height: window.innerHeight });
+    const onRouteChange = () => {
+      const showLanding = !isWorkspaceRoute();
+      setLandingOpen(showLanding);
+      if (showLanding) setOnboardingOpen(false);
+    };
     window.addEventListener('resize', onResize);
-    return () => window.removeEventListener('resize', onResize);
+    window.addEventListener('popstate', onRouteChange);
+    window.addEventListener('hashchange', onRouteChange);
+    return () => {
+      window.removeEventListener('resize', onResize);
+      window.removeEventListener('popstate', onRouteChange);
+      window.removeEventListener('hashchange', onRouteChange);
+    };
   }, []);
 
   // Close More Menu on outside click
@@ -726,14 +736,20 @@ export const App: React.FC = () => {
     [dict, meta, persistProject]
   );
 
-  const clearLandingUrlFlag = () => {
-    if (window.location.search.includes('home=1') || window.location.hash === '#home') {
-      window.history.replaceState(null, '', window.location.pathname);
+  const pushWorkspaceRoute = () => {
+    if (!isWorkspaceRoute()) {
+      window.history.pushState(null, '', `${window.location.pathname}#app`);
+    }
+  };
+
+  const pushLandingRoute = () => {
+    if (window.location.hash || window.location.search) {
+      window.history.pushState(null, '', window.location.pathname);
     }
   };
 
   const handleEnterCanvasDirectly = useCallback(() => {
-    clearLandingUrlFlag();
+    pushWorkspaceRoute();
     setLandingOpen(false);
     setOnboardingOpen(false);
     if (meta && !meta.onboardingCompleted) {
@@ -789,7 +805,7 @@ export const App: React.FC = () => {
         void persistProject(configured);
       }
 
-      clearLandingUrlFlag();
+      pushWorkspaceRoute();
       setSelectedIds([]);
       setEditingCardId(null);
       setOnboardingOpen(false);
@@ -3019,6 +3035,7 @@ export const App: React.FC = () => {
                       className="popover-action-btn"
                       onClick={() => {
                         setMoreMenuOpen(false);
+                        pushLandingRoute();
                         setLandingOpen(true);
                       }}
                     >

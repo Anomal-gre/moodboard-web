@@ -137,7 +137,7 @@ export const vi = {
 
   // Appearance / Settings
   appearanceTitle: 'Tùy chỉnh bảng',
-  bgPresetLight: 'Sáng iOS',
+  bgPresetLight: 'Giấy sáng',
   bgPresetDark: 'Tối Studio',
   bgCustomHex: 'Màu nền HEX',
   dotGrid: 'Hiện lưới chấm',
