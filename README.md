@@ -4,6 +4,17 @@
 
 Triết lý cốt lõi: **Gom trước, xếp sau, truy lại nguồn, chỉnh tay được.**
 
+## Giao diện Mosa
+
+![Trang chủ Mosa với hình ảnh moodboard nội thất và các nút bắt đầu](docs/images/landing.jpg)
+
+Bộ ảnh mẫu đi kèm giúp bạn bắt đầu tạo moodboard ngay trong ứng dụng.
+
+| Không gian | Chất liệu | Bảng màu |
+| --- | --- | --- |
+| ![Phòng khách với ánh sáng tự nhiên](public/samples/living-room.jpg) | ![Mẫu chất liệu gỗ, đá và vải](public/samples/material-texture.jpg) | ![Các mẫu màu sơn](public/samples/paint-swatches.jpg) |
+
+
 ---
 
 ## 1. Yêu cầu môi trường & Chạy local
