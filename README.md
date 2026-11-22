@@ -1,6 +1,6 @@
 # Mosa — Local-First AI Moodboard Workspace
 
-**Gom cảm hứng. Xếp bảng chuẩn studio.**
+**Gom cảm hứng · "Shape" tầm nhìn**
 
 **Mosa** là không gian làm moodboard **local-first** chạy trực tiếp trên trình duyệt dành cho nhà thiết kế nội thất, đồ họa, kiến trúc sư và người làm sáng tạo. Toàn bộ dự án, hình ảnh và tệp đính kèm được lưu riêng tư ngay trên máy người dùng bằng **IndexedDB** (có thể xuất gọn thành 1 tệp `.mosa`), kết hợp mô hình AI phân loại thị giác **CLIP (`Xenova/clip-vit-base-patch32`, `dtype: 'q8'`)** chạy 100% cục bộ qua **Web Worker + WASM**.
 

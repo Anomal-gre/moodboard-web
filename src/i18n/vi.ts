@@ -480,8 +480,8 @@ export const vi = {
   landingCtaDirectCanvas: 'Hoặc mở ngay bảng mẫu →',
   landingCtaStartWizard: 'Hoặc tạo bảng mới theo lĩnh vực →',
   landingHeroEyebrow: 'Mosa',
-  landingHeroTitleLine1: 'Gom cảm hứng.',
-  landingHeroTitleLine2: 'Xếp bảng chuẩn studio.',
+  landingHeroTitleLine1: 'Gom cảm hứng',
+  landingHeroTitleLine2: '"Shape" tầm nhìn',
   landingHeroSubtitle:
     'Không gian moodboard nhẹ, mượt và riêng tư — từ lưu ảnh đến bàn giao khách hàng.',
   landingTrustLine: 'Miễn phí · Không cần tài khoản · Lưu ngay trên máy',
