@@ -312,26 +312,22 @@ export const LandingPage: React.FC<LandingPageProps> = ({
       <section className="ld-hero">
         <div className="ld-container ld-hero-inner">
           <div className="ld-hero-copy">
-            <span className="ld-eyebrow-pill ld-hero-enter" style={{ '--d': '0ms' } as React.CSSProperties}>
-              <span className="ld-live-dot" aria-hidden="true" />
-              <span>{dict.landingHeroEyebrow}</span>
-            </span>
             <h1 className="ld-hero-title">
-              <span className="ld-hero-enter" style={{ '--d': '85ms' } as React.CSSProperties}>
+              <span className="ld-hero-enter" style={{ '--d': '40ms' } as React.CSSProperties}>
                 {dict.landingHeroTitleLine1}
               </span>
               <span
                 className="ld-hero-title-accent ld-hero-enter"
-                style={{ '--d': '175ms' } as React.CSSProperties}
+                style={{ '--d': '130ms' } as React.CSSProperties}
               >
                 {dict.landingHeroTitleLine2}
               </span>
             </h1>
-            <p className="ld-hero-subtitle ld-hero-enter" style={{ '--d': '265ms' } as React.CSSProperties}>
+            <p className="ld-hero-subtitle ld-hero-enter" style={{ '--d': '210ms' } as React.CSSProperties}>
               {dict.landingHeroSubtitle}
             </p>
 
-            <div className="ld-hero-ctas ld-hero-enter" style={{ '--d': '350ms' } as React.CSSProperties}>
+            <div className="ld-hero-ctas ld-hero-enter" style={{ '--d': '290ms' } as React.CSSProperties}>
               <button type="button" className="ld-btn ld-btn--primary ld-btn--lg" onClick={handlePrimaryCta}>
                 <span>{primaryCtaLabel}</span>
                 <ArrowRight size={17} />
@@ -346,17 +342,8 @@ export const LandingPage: React.FC<LandingPageProps> = ({
               </button>
             </div>
 
-            <div className="ld-hero-sub-row ld-hero-enter" style={{ '--d': '430ms' } as React.CSSProperties}>
+            <div className="ld-hero-sub-row ld-hero-enter" style={{ '--d': '360ms' } as React.CSSProperties}>
               <span className="ld-trust-caption">{dict.landingTrustLine}</span>
-              {hasExistingWorkspace ? (
-                <button type="button" className="ld-inline-link" onClick={onStartOnboarding}>
-                  {dict.landingCtaStartWizard}
-                </button>
-              ) : (
-                <button type="button" className="ld-inline-link" onClick={onEnterCanvasDirectly}>
-                  {dict.landingCtaDirectCanvas}
-                </button>
-              )}
             </div>
           </div>
 
@@ -377,9 +364,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({
       <section id="demo" className="ld-section ld-section--tinted">
         <div className="ld-container">
           <div className="ld-section-head ld-reveal" data-reveal="section">
-            <span className="ld-section-eyebrow">{dict.landingDemoEyebrow}</span>
             <h2 className="ld-section-title">{dict.landingDemoTitle}</h2>
-            <p className="ld-section-desc">{dict.landingDemoSubtitle}</p>
           </div>
 
           <div className="ld-reveal" data-reveal="demo" style={{ '--rd': '80ms' } as React.CSSProperties}>
@@ -392,9 +377,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({
       <section id="showcase" className="ld-section">
         <div className="ld-container">
           <div className="ld-section-head ld-reveal" data-reveal="section">
-            <span className="ld-section-eyebrow">{dict.landingShowcaseEyebrow}</span>
             <h2 className="ld-section-title">{dict.landingShowcaseTitle}</h2>
-            <p className="ld-section-desc">{dict.landingShowcaseSubtitle}</p>
           </div>
 
           <div className="ld-showcase-tabs ld-reveal" data-reveal="section" role="tablist">
@@ -545,11 +528,10 @@ export const LandingPage: React.FC<LandingPageProps> = ({
         </div>
       </section>
 
-      {/* Visual-First 4-Tile Bento Highlights (No tech walls!) */}
+      {/* Visual-First 4-Tile Bento Highlights */}
       <section id="features" className="ld-section ld-section--tinted">
         <div className="ld-container">
           <div className="ld-section-head ld-reveal" data-reveal="section">
-            <span className="ld-section-eyebrow">{dict.landingFeaturesEyebrow}</span>
             <h2 className="ld-section-title">{dict.landingFeaturesTitle}</h2>
           </div>
 
@@ -663,7 +645,6 @@ export const LandingPage: React.FC<LandingPageProps> = ({
       <section id="compare" className="ld-section">
         <div className="ld-container">
           <div className="ld-section-head ld-reveal" data-reveal="section">
-            <span className="ld-section-eyebrow">{dict.landingCompareEyebrow}</span>
             <h2 className="ld-section-title">{dict.landingCompareTitle}</h2>
           </div>
 
@@ -710,9 +691,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({
       <section id="install" className="ld-section ld-section--tinted">
         <div className="ld-container">
           <div className="ld-section-head ld-reveal" data-reveal="section">
-            <span className="ld-section-eyebrow">{dict.landingInstallEyebrow}</span>
             <h2 className="ld-section-title">{dict.landingInstallTitle}</h2>
-            <p className="ld-section-desc">{dict.landingInstallSubtitle}</p>
           </div>
 
           <div className="ld-install-grid">
@@ -850,7 +829,6 @@ export const LandingPage: React.FC<LandingPageProps> = ({
       <section className="ld-closing">
         <div className="ld-container ld-closing-inner ld-reveal" data-reveal="section">
           <h2>{dict.landingClosingTitle}</h2>
-          <p>{dict.landingClosingSubtitle}</p>
           <div className="ld-hero-ctas">
             <button type="button" className="ld-btn ld-btn--primary ld-btn--lg" onClick={handlePrimaryCta}>
               <span>{primaryCtaLabel}</span>

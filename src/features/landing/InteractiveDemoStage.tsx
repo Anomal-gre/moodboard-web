@@ -613,7 +613,7 @@ export const InteractiveDemoStage: React.FC<InteractiveDemoStageProps> = ({
 
           <div key={activeStep} className="ld-demo-active-summary">
             <strong>{steps[activeStep].title}</strong>
-            <span>{steps[activeStep].desc}</span>
+            {steps[activeStep].desc && <span>{steps[activeStep].desc}</span>}
           </div>
 
           <button type="button" className="ld-btn ld-btn--primary ld-btn--sm" onClick={onTryNow}>
