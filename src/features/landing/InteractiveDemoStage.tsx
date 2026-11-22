@@ -627,14 +627,18 @@ export const InteractiveDemoStage: React.FC<InteractiveDemoStageProps> = ({
             const Icon = step.icon;
             const isActive = idx === activeStep;
             const isPast = idx < activeStep;
-            const fillPct = isPast ? 100 : isActive ? Math.min(100, Math.max(0, stepProgress)) : 0;
+            const fillRatio = isPast
+              ? 1
+              : isActive
+                ? Math.min(1, Math.max(0, stepProgress / 100))
+                : 0;
             return (
               <button
                 key={step.label}
                 type="button"
                 role="tab"
                 aria-selected={isActive}
-                className={`ld-chapter-tab ${isActive ? 'is-active' : ''}`}
+                className={`ld-chapter-tab ${isActive ? 'is-active' : ''} ${isPast ? 'is-past' : ''}`}
                 onClick={() => jumpToStep(idx)}
               >
                 <div className="ld-chapter-head">
@@ -642,7 +646,10 @@ export const InteractiveDemoStage: React.FC<InteractiveDemoStageProps> = ({
                   <span>{step.label}</span>
                 </div>
                 <div className="ld-chapter-track">
-                  <div className="ld-chapter-fill" style={{ width: `${fillPct}%` }} />
+                  <div
+                    className="ld-chapter-fill"
+                    style={{ transform: `scaleX(${fillRatio})` }}
+                  />
                 </div>
               </button>
             );
