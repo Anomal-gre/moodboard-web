@@ -603,7 +603,13 @@ export const vi = {
     'Chụp nhanh ảnh sắc nét từ Pinterest, Behance, ArchDaily thẳng vào khay tư liệu trên cả Web lẫn ứng dụng.',
   landingInstallSyncNote:
     'Làm việc trên hai máy tính khác nhau? Bật Tự lưu vào thư mục .mosa để đồng bộ qua Google Drive, iCloud hoặc OneDrive.',
-  landingFooterNote: 'Mosa · Không gian Moodboard sáng tạo · Say AI Ambassador 2026',
+  landingFooterCreatorBio:
+    'Thiết kế & phát triển bởi Trần Gia Bảo (Anomal) — Graphic Designer & Creative Builder tại Hà Nội.',
+  landingFooterColProduct: 'Sản phẩm',
+  landingFooterColCreator: 'Về tác giả',
+  landingFooterColMore: 'Dự án khác & Liên hệ',
+  landingFooterRepoLink: 'Mã nguồn (GitHub)',
+  landingFooterNote: '© 2026 Tran Gia Bao (Anomal) · Mosa',
 
   // Onboarding Modal (2 steps)
   onboardSkip: 'Bỏ qua',

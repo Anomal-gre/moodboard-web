@@ -575,7 +575,13 @@ export const en: I18nDict = {
     'Capture crisp visuals from Pinterest, Behance, and ArchDaily right into your workspace inbox.',
   landingInstallSyncNote:
     'Working across two computers? Turn on Local .mosa Folder Sync in Settings to save into Google Drive, iCloud, or OneDrive.',
-  landingFooterNote: 'Mosa · Studio Moodboard Workspace · Say AI Ambassador 2026',
+  landingFooterCreatorBio:
+    'Designed & built by Tran Gia Bao (Anomal) — Graphic Designer & Creative Builder based in Hanoi.',
+  landingFooterColProduct: 'Product',
+  landingFooterColCreator: 'Creator',
+  landingFooterColMore: 'Other Projects & Contact',
+  landingFooterRepoLink: 'Source Code (GitHub)',
+  landingFooterNote: '© 2026 Tran Gia Bao (Anomal) · Mosa',
 
   // Onboarding Modal (2 steps)
   onboardSkip: 'Skip',

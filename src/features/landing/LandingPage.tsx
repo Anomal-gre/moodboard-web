@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import {
   ArrowRight,
+  ArrowUpRight,
   Check,
   CheckCircle2,
   Download,
@@ -8,6 +9,7 @@ import {
   Globe,
   HardDrive,
   LayoutGrid,
+  Mail,
   Minus,
   MonitorDown,
   Play,
@@ -851,10 +853,150 @@ export const LandingPage: React.FC<LandingPageProps> = ({
       </section>
 
       <footer className="ld-footer">
-        <div className="ld-container ld-footer-inner">
-          <div className="ld-footer-brand">
-            <img src={`${BASE}brand/logo.svg`} alt="Mosa" width={18} height={18} />
+        <div className="ld-container">
+          <div className="ld-footer-grid">
+            {/* Column 1: Brand & Creator Identity */}
+            <div className="ld-footer-col ld-footer-col--brand">
+              <div className="ld-footer-logo-row">
+                <img src={`${BASE}brand/logo.svg`} alt="Mosa" width={22} height={22} />
+                <span className="ld-nav-wordmark">Mosa</span>
+              </div>
+              <p className="ld-footer-bio">{dict.landingFooterCreatorBio}</p>
+              <a
+                href="https://anomal.ohwow.win"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="ld-footer-site-pill"
+              >
+                <span>anomal.ohwow.win</span>
+                <ArrowUpRight size={13} />
+              </a>
+            </div>
+
+            {/* Column 2: Product */}
+            <div className="ld-footer-col">
+              <h4>{dict.landingFooterColProduct}</h4>
+              <ul>
+                <li>
+                  <button type="button" onClick={() => scrollToSection('demo')}>
+                    {dict.landingNavDemo}
+                  </button>
+                </li>
+                <li>
+                  <button type="button" onClick={() => scrollToSection('showcase')}>
+                    {dict.landingNavShowcase}
+                  </button>
+                </li>
+                <li>
+                  <button type="button" onClick={() => scrollToSection('install')}>
+                    {dict.landingNavInstall}
+                  </button>
+                </li>
+                <li>
+                  <a
+                    href="https://github.com/Anomal-gre/moodboard-web"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                  >
+                    <span>{dict.landingFooterRepoLink}</span>
+                    <ArrowUpRight size={12} />
+                  </a>
+                </li>
+              </ul>
+            </div>
+
+            {/* Column 3: Creator Links (from anomal.ohwow.win) */}
+            <div className="ld-footer-col">
+              <h4>{dict.landingFooterColCreator}</h4>
+              <ul>
+                <li>
+                  <a
+                    href="https://anomal.ohwow.win"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                  >
+                    <span>Anomal · Website</span>
+                    <ArrowUpRight size={12} />
+                  </a>
+                </li>
+                <li>
+                  <a
+                    href="https://drive.google.com/drive/folders/1VGFzM5YZ_y-cfqixUHnG_vazjcJgUScA?usp=sharing"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                  >
+                    <span>Portfolio</span>
+                    <ArrowUpRight size={12} />
+                  </a>
+                </li>
+                <li>
+                  <a
+                    href="https://github.com/Anomal-gre"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                  >
+                    <span>GitHub (@Anomal-gre)</span>
+                    <ArrowUpRight size={12} />
+                  </a>
+                </li>
+                <li>
+                  <a
+                    href="https://www.linkedin.com/in/anomal/"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                  >
+                    <span>LinkedIn</span>
+                    <ArrowUpRight size={12} />
+                  </a>
+                </li>
+                <li>
+                  <a
+                    href="https://www.facebook.com/anomalgreatad/"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                  >
+                    <span>Facebook</span>
+                    <ArrowUpRight size={12} />
+                  </a>
+                </li>
+              </ul>
+            </div>
+
+            {/* Column 4: Other Projects & Contact */}
+            <div className="ld-footer-col">
+              <h4>{dict.landingFooterColMore}</h4>
+              <ul>
+                <li>
+                  <a href="https://ohwow.win" target="_blank" rel="noopener noreferrer">
+                    <span>Ohwow.win</span>
+                    <ArrowUpRight size={12} />
+                  </a>
+                </li>
+                <li>
+                  <a href="https://chonvachot.com" target="_blank" rel="noopener noreferrer">
+                    <span>Chọn &amp; Chốt</span>
+                    <ArrowUpRight size={12} />
+                  </a>
+                </li>
+                <li>
+                  <a href="mailto:contact.anomal@gmail.com">
+                    <Mail size={12} />
+                    <span>contact.anomal@gmail.com</span>
+                  </a>
+                </li>
+                <li>
+                  <a href="mailto:bao.anomal@gmail.com">
+                    <Mail size={12} />
+                    <span>bao.anomal@gmail.com</span>
+                  </a>
+                </li>
+              </ul>
+            </div>
+          </div>
+
+          <div className="ld-footer-bottom">
             <span>{dict.landingFooterNote}</span>
+            <span>Say AI Ambassador 2026</span>
           </div>
         </div>
       </footer>
