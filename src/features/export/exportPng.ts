@@ -672,16 +672,21 @@ export async function openFfePrintSpecWindow(
     }
   }
 
+  const isVi = dict.exportFfePrint.includes('PDF') && dict.cancel === 'Hủy';
+  const bounds = computeCardsBounds(items);
+  const defaultOrientation: 'landscape' | 'portrait' =
+    bounds && bounds.h > bounds.w * 1.15 ? 'portrait' : 'landscape';
+
   const studioName = studioProfile?.studioName?.trim() || 'Mosa';
   const studioContact = studioProfile?.studioContact?.trim() || 'Mosa Specification Schedule';
   const studioLogoHtml = studioProfile?.studioLogoDataUrl
-    ? `<img src="${studioProfile.studioLogoDataUrl}" alt="" style="height:30px;width:auto;max-width:130px;object-fit:contain;border-radius:5px;" />`
+    ? `<img src="${studioProfile.studioLogoDataUrl}" alt="" style="height:26px;width:auto;max-width:120px;object-fit:contain;border-radius:5px;" />`
     : '';
   const clientMetaParts = [
     project.clientName ? `${dict.homeClientLabel}: ${project.clientName}` : '',
     project.projectCode ? project.projectCode : '',
-    new Date().toLocaleDateString(),
-    `${items.length} items`,
+    new Date().toLocaleDateString(isVi ? 'vi-VN' : 'en-US'),
+    `${items.length} ${isVi ? 'hạng mục' : 'items'}`,
   ].filter(Boolean);
 
   const rowsHtml = budget.rows
@@ -690,26 +695,26 @@ export async function openFfePrintSpecWindow(
       const thumb = thumbMap.get(c.id);
       const swColor = c.color || c.dominantHex;
       const previewCell = thumb
-        ? `<img src="${escapeHtml(thumb)}" referrerpolicy="no-referrer" style="width:46px;height:46px;object-fit:cover;border-radius:6px;border:1px solid #e5e7eb;" />`
+        ? `<img src="${escapeHtml(thumb)}" referrerpolicy="no-referrer" style="width:36px;height:36px;object-fit:cover;border-radius:6px;border:1px solid #e5e7eb;display:block;" />`
         : swColor
-          ? `<div style="width:46px;height:46px;border-radius:6px;background:${escapeHtml(swColor)};border:1px solid rgba(0,0,0,0.12);"></div>`
-          : `<div style="width:46px;height:46px;border-radius:6px;background:#f3f4f6;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;color:#6b7280;">${escapeHtml(c.kind.toUpperCase())}</div>`;
+          ? `<div style="width:36px;height:36px;border-radius:6px;background:${escapeHtml(swColor)};border:1px solid rgba(0,0,0,0.12);"></div>`
+          : `<div style="width:36px;height:36px;border-radius:6px;background:#f3f4f6;display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:700;color:#6b7280;">${escapeHtml(c.kind.toUpperCase())}</div>`;
 
       const lineTotalStr =
         row.lineTotal !== null ? formatCurrency(row.lineTotal, budget.currency) : '—';
 
       return `<tr>
-        <td style="padding:9px 8px;border-bottom:1px solid #e5e7eb;color:#6b7280;font-weight:600;">${String(idx + 1).padStart(2, '0')}</td>
-        <td style="padding:9px 8px;border-bottom:1px solid #e5e7eb;">${previewCell}</td>
-        <td style="padding:9px 8px;border-bottom:1px solid #e5e7eb;">
-          <div style="font-weight:650;color:#111827;">${escapeHtml(c.title || c.kind)}</div>
-          <div style="font-size:11.5px;color:#6b7280;margin-top:2px;">${escapeHtml(getCategoryLabel(dict, c.category))}${swColor ? ` · ${escapeHtml(swColor)}` : ''}</div>
+        <td style="padding:6px 8px;border-bottom:1px solid #e5e7eb;color:#6b7280;font-weight:600;font-variant-numeric:tabular-nums;width:30px;">${String(idx + 1).padStart(2, '0')}</td>
+        <td style="padding:6px 8px;border-bottom:1px solid #e5e7eb;width:48px;">${previewCell}</td>
+        <td style="padding:6px 8px;border-bottom:1px solid #e5e7eb;">
+          <div style="font-weight:650;color:#111827;line-height:1.3;">${escapeHtml(c.title || c.kind)}</div>
+          <div style="font-size:10.5px;color:#6b7280;margin-top:2px;">${escapeHtml(getCategoryLabel(dict, c.category))}${swColor ? ` · ${escapeHtml(swColor)}` : ''}</div>
         </td>
-        <td style="padding:9px 8px;border-bottom:1px solid #e5e7eb;font-size:12px;color:#1f2937;">${escapeHtml(c.spec?.code || '—')}</td>
-        <td style="padding:9px 8px;border-bottom:1px solid #e5e7eb;font-size:12.5px;font-weight:600;text-align:center;">${row.qty}</td>
-        <td style="padding:9px 8px;border-bottom:1px solid #e5e7eb;font-size:12px;color:#374151;text-align:right;">${escapeHtml(c.spec?.price || '—')}</td>
-        <td style="padding:9px 8px;border-bottom:1px solid #e5e7eb;font-size:12.5px;font-weight:700;color:#111827;text-align:right;">${escapeHtml(lineTotalStr)}</td>
-        <td style="padding:9px 8px;border-bottom:1px solid #e5e7eb;font-size:11.5px;color:#4b5563;max-width:210px;">${escapeHtml(c.text || '')}</td>
+        <td style="padding:6px 8px;border-bottom:1px solid #e5e7eb;font-size:11.5px;color:#1f2937;white-space:nowrap;">${escapeHtml(c.spec?.code || '—')}</td>
+        <td style="padding:6px 8px;border-bottom:1px solid #e5e7eb;font-size:12px;font-weight:600;text-align:center;font-variant-numeric:tabular-nums;">${row.qty}</td>
+        <td style="padding:6px 8px;border-bottom:1px solid #e5e7eb;font-size:11.5px;color:#374151;text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums;">${escapeHtml(c.spec?.price || '—')}</td>
+        <td style="padding:6px 8px;border-bottom:1px solid #e5e7eb;font-size:12px;font-weight:700;color:#111827;text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums;">${escapeHtml(lineTotalStr)}</td>
+        <td style="padding:6px 8px;border-bottom:1px solid #e5e7eb;font-size:11px;color:#4b5563;max-width:210px;line-height:1.35;">${escapeHtml(c.text || '')}</td>
       </tr>`;
     })
     .join('');
@@ -723,74 +728,292 @@ export async function openFfePrintSpecWindow(
       : '';
 
   const html = `<!doctype html>
-<html>
+<html lang="${isVi ? 'vi' : 'en'}">
 <head>
   <meta charset="utf-8" />
   <title>${escapeHtml(studioName)} · ${escapeHtml(project.name)} — FF&E Spec Sheet</title>
+  <style id="page-orientation-style">@page { size: A4 ${defaultOrientation}; margin: 0; }</style>
   <style>
-    @page { size: A4 landscape; margin: 14mm; }
-    body { font-family: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; color: #111827; margin: 0; padding: 24px; background: #ffffff; }
-    .header { display: flex; justify-content: space-between; align-items: center; gap: 14px; border-bottom: 2px solid #111827; padding-bottom: 10px; margin-bottom: 18px; }
-    .header-left { display: flex; align-items: center; gap: 12px; }
-    .title { font-size: 19px; font-weight: 700; letter-spacing: -0.02em; }
-    .brand { font-family: "Bricolage Grotesque", Inter, sans-serif; letter-spacing: -0.035em; }
-    .meta { font-size: 12px; color: #6b7280; text-align: right; }
-    .board-hero { text-align: center; margin-bottom: 28px; page-break-after: always; }
-    .board-hero img.board-spread { max-width: 100%; max-height: 520px; object-fit: contain; border-radius: 12px; border: 1px solid #e5e7eb; }
-    table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
-    th { text-align: left; padding: 9px 8px; border-bottom: 1.5px solid #111827; font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.04em; color: #4b5563; }
-    .budget-total { margin-top: 16px; padding: 13px 16px; border-radius: 10px; background: #f3f4f6; border: 1px solid #e5e7eb; display: flex; justify-content: space-between; align-items: center; font-size: 14px; font-weight: 700; }
-    .budget-amount { font-size: 17px; color: #007aff; }
-    .doc-footer { margin-top: 18px; padding-top: 10px; border-top: 1px solid #e5e7eb; display: flex; justify-content: space-between; font-size: 11px; color: #6b7280; }
+    * { box-sizing: border-box; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    html, body {
+      margin: 0;
+      padding: 0;
+      font-family: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      color: #1f221d;
+      background: #ecebe7;
+    }
+    .print-toolbar {
+      position: sticky;
+      top: 0;
+      z-index: 20;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 10px 20px;
+      background: rgba(255, 255, 255, 0.94);
+      backdrop-filter: blur(12px);
+      border-bottom: 1px solid #dfddd4;
+      font-size: 13px;
+    }
+    .toolbar-left { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+    .toolbar-tip { font-size: 12px; color: #565950; }
+    .toolbar-actions { display: flex; align-items: center; gap: 8px; }
+    .tb-seg {
+      display: inline-flex;
+      padding: 3px;
+      border-radius: 9px;
+      background: #f2efe9;
+      border: 1px solid #dfddd4;
+    }
+    .tb-seg button {
+      border: none;
+      background: transparent;
+      color: #565950;
+      font-size: 12px;
+      font-weight: 600;
+      padding: 5px 11px;
+      border-radius: 6px;
+      cursor: pointer;
+    }
+    .tb-seg button.is-active {
+      background: #ffffff;
+      color: #1f221d;
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+    }
+    .tb-print-btn {
+      border: none;
+      background: #0059c7;
+      color: #ffffff;
+      font-size: 13px;
+      font-weight: 600;
+      padding: 8px 16px;
+      border-radius: 9px;
+      cursor: pointer;
+    }
+    .tb-print-btn:hover { background: #0048a4; }
+
+    .deck-sheets {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 20px;
+      padding: 24px 16px 40px;
+    }
+    .deck-page {
+      width: 297mm;
+      background: #ffffff;
+      padding: 11mm 14mm;
+      box-shadow: 0 14px 36px rgba(0, 0, 0, 0.1);
+      border-radius: 6px;
+    }
+    .deck-page--hero {
+      height: 210mm;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      overflow: hidden;
+    }
+    .deck-page--spec {
+      min-height: 210mm;
+      display: flex;
+      flex-direction: column;
+    }
+    body.is-portrait .deck-page { width: 210mm; }
+    body.is-portrait .deck-page--hero { height: 297mm; }
+    body.is-portrait .deck-page--spec { min-height: 297mm; }
+
+    .header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 14px;
+      border-bottom: 1.5px solid #1f221d;
+      padding-bottom: 8px;
+      margin-bottom: 10px;
+      flex-shrink: 0;
+    }
+    .header-left { display: flex; align-items: center; gap: 10px; min-width: 0; }
+    .title { font-size: 16.5px; font-weight: 700; letter-spacing: -0.02em; }
+    .brand { font-family: "Bricolage Grotesque", Inter, sans-serif; letter-spacing: -0.03em; }
+    .meta { font-size: 11.5px; color: #565950; text-align: right; white-space: nowrap; }
+
+    .board-stage {
+      flex: 1;
+      min-height: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 3mm 0;
+    }
+    .board-stage img.board-spread {
+      width: 100%;
+      height: 100%;
+      max-width: 100%;
+      max-height: 100%;
+      object-fit: contain;
+      border-radius: 10px;
+      border: 1px solid #e5e7eb;
+    }
+
+    .spec-body { flex: 1; }
+    table { width: 100%; border-collapse: collapse; font-size: 12px; }
+    thead { display: table-header-group; }
+    tr { break-inside: avoid; page-break-inside: avoid; }
+    th {
+      text-align: left;
+      padding: 7px 8px;
+      border-bottom: 1.5px solid #1f221d;
+      font-size: 10px;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      color: #4b5563;
+      white-space: nowrap;
+    }
+    .budget-total {
+      margin-top: 12px;
+      padding: 11px 14px;
+      border-radius: 9px;
+      background: #f5f3ee;
+      border: 1px solid #dfddd4;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 13px;
+      font-weight: 700;
+      break-inside: avoid;
+      page-break-inside: avoid;
+    }
+    .budget-amount { font-size: 16px; color: #0059c7; font-variant-numeric: tabular-nums; }
+    .doc-footer {
+      margin-top: 10px;
+      padding-top: 8px;
+      border-top: 1px solid #e5e7eb;
+      display: flex;
+      justify-content: space-between;
+      font-size: 10.5px;
+      color: #6b7280;
+      flex-shrink: 0;
+    }
+
+    @media print {
+      html, body { background: #ffffff !important; }
+      .print-toolbar { display: none !important; }
+      .deck-sheets { display: block; padding: 0; gap: 0; }
+      .deck-page {
+        width: 100% !important;
+        margin: 0 !important;
+        border-radius: 0 !important;
+        box-shadow: none !important;
+      }
+      .deck-page--hero {
+        height: 209mm;
+        page-break-after: always;
+        break-after: page;
+      }
+      body.is-portrait .deck-page--hero { height: 296mm; }
+      .deck-page--spec { min-height: auto; }
+    }
   </style>
 </head>
-<body>
-  <div class="board-hero">
-    <div class="header">
-      <div class="header-left">
-        ${studioLogoHtml}
-        <div class="title"><span class="brand">${escapeHtml(studioName)}</span> · ${escapeHtml(project.name)}</div>
+<body class="${defaultOrientation === 'portrait' ? 'is-portrait' : ''}">
+  <div class="print-toolbar">
+    <div class="toolbar-left">
+      <div class="tb-seg" role="group" aria-label="Orientation">
+        <button type="button" id="btn-land" class="${defaultOrientation === 'landscape' ? 'is-active' : ''}">${isVi ? 'A4 Ngang' : 'A4 Landscape'}</button>
+        <button type="button" id="btn-port" class="${defaultOrientation === 'portrait' ? 'is-active' : ''}">${isVi ? 'A4 Dọc' : 'A4 Portrait'}</button>
       </div>
-      <div class="meta">${escapeHtml(clientMetaParts.join(' · '))}</div>
+      <span class="toolbar-tip">${
+        isVi
+          ? 'Mẹo: Chọn đích "Lưu dưới dạng PDF (Save as PDF)" để giữ đúng hướng trang và không bị viền thừa.'
+          : 'Tip: Choose "Save as PDF" as destination to keep exact orientation with zero browser headers.'
+      }</span>
     </div>
-    <img class="board-spread" src="${boardDataUrl}" alt="Moodboard" />
-    <div class="doc-footer">
-      <span>${escapeHtml(studioContact)}</span>
-      <span>${escapeHtml(project.name)}</span>
+    <div class="toolbar-actions">
+      <button type="button" class="tb-print-btn" id="btn-print">${isVi ? 'Lưu PDF / In' : 'Save PDF / Print'}</button>
     </div>
   </div>
-  <div class="header">
-    <div class="header-left">
-      ${studioLogoHtml}
-      <div class="title">${escapeHtml(project.name)} — ${escapeHtml(dict.ffeSection)}</div>
-    </div>
-    <div class="meta">${escapeHtml(studioContact)}</div>
+
+  <div class="deck-sheets">
+    <section class="deck-page deck-page--hero">
+      <div class="header">
+        <div class="header-left">
+          ${studioLogoHtml}
+          <div class="title"><span class="brand">${escapeHtml(studioName)}</span> · ${escapeHtml(project.name)}</div>
+        </div>
+        <div class="meta">${escapeHtml(clientMetaParts.join(' · '))}</div>
+      </div>
+      <div class="board-stage">
+        <img class="board-spread" src="${boardDataUrl}" alt="Moodboard" />
+      </div>
+      <div class="doc-footer">
+        <span>${escapeHtml(studioContact)}</span>
+        <span>${escapeHtml(project.name)} · 01</span>
+      </div>
+    </section>
+
+    <section class="deck-page deck-page--spec">
+      <div class="header">
+        <div class="header-left">
+          ${studioLogoHtml}
+          <div class="title">${escapeHtml(project.name)} — ${escapeHtml(dict.ffeSection)}</div>
+        </div>
+        <div class="meta">${escapeHtml(studioContact)}</div>
+      </div>
+      <div class="spec-body">
+        <table>
+          <thead>
+            <tr>
+              <th>#</th>
+              <th></th>
+              <th>${escapeHtml(dict.titleLabel)}</th>
+              <th>${escapeHtml(dict.ffeCodeLabel)}</th>
+              <th style="text-align:center;">${escapeHtml(dict.ffeQtyLabel)}</th>
+              <th style="text-align:right;">${escapeHtml(dict.ffePriceLabel)}</th>
+              <th style="text-align:right;">${escapeHtml(dict.ffeLineTotalLabel)}</th>
+              <th>${escapeHtml(dict.captionLabel)}</th>
+            </tr>
+          </thead>
+          <tbody>${rowsHtml}</tbody>
+        </table>
+        ${budgetBannerHtml}
+      </div>
+      <div class="doc-footer">
+        <span>${escapeHtml(studioName)} · ${escapeHtml(studioContact)}</span>
+        <span>${escapeHtml(new Date().toLocaleDateString(isVi ? 'vi-VN' : 'en-US'))} · 02</span>
+      </div>
+    </section>
   </div>
-  <table>
-    <thead>
-      <tr>
-        <th>#</th>
-        <th></th>
-        <th>${escapeHtml(dict.titleLabel)}</th>
-        <th>${escapeHtml(dict.ffeCodeLabel)}</th>
-        <th style="text-align:center;">${escapeHtml(dict.ffeQtyLabel)}</th>
-        <th style="text-align:right;">${escapeHtml(dict.ffePriceLabel)}</th>
-        <th style="text-align:right;">${escapeHtml(dict.ffeLineTotalLabel)}</th>
-        <th>${escapeHtml(dict.captionLabel)}</th>
-      </tr>
-    </thead>
-    <tbody>${rowsHtml}</tbody>
-  </table>
-  ${budgetBannerHtml}
-  <div class="doc-footer">
-    <span>${escapeHtml(studioName)} · ${escapeHtml(studioContact)}</span>
-    <span>${escapeHtml(new Date().toLocaleDateString())}</span>
-  </div>
-  <script>window.onload = () => { setTimeout(() => window.print(), 350); };</script>
+
+  <script>
+    (function () {
+      var styleTag = document.getElementById('page-orientation-style');
+      var btnLand = document.getElementById('btn-land');
+      var btnPort = document.getElementById('btn-port');
+      var btnPrint = document.getElementById('btn-print');
+      function setOrient(mode) {
+        styleTag.textContent = '@page { size: A4 ' + mode + '; margin: 0; }';
+        document.body.classList.toggle('is-portrait', mode === 'portrait');
+        btnLand.classList.toggle('is-active', mode === 'landscape');
+        btnPort.classList.toggle('is-active', mode === 'portrait');
+      }
+      btnLand.addEventListener('click', function () { setOrient('landscape'); });
+      btnPort.addEventListener('click', function () { setOrient('portrait'); });
+      btnPrint.addEventListener('click', function () { window.print(); });
+      window.addEventListener('load', function () {
+        var imgs = Array.prototype.slice.call(document.images || []);
+        Promise.all(imgs.map(function (img) {
+          return img.decode ? img.decode().catch(function () {}) : Promise.resolve();
+        })).then(function () {
+          setTimeout(function () { window.print(); }, 220);
+        });
+      });
+    })();
+  </script>
 </body>
 </html>`;
 
-  const win = window.open('', '_blank', 'width=1120,height=800');
+  const win = window.open('', '_blank', 'width=1180,height=840');
   if (win) {
     win.document.open();
     win.document.write(html);
