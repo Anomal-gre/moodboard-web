@@ -18,13 +18,13 @@ import { AppleSelect } from '../../components/AppleSelect';
 import {
   buildSourcesManifest,
   exportFfeScheduleCsv,
-  openFfePrintSpecWindow,
   precheckExport,
   renderMoodboardPng,
   slugifyFileName,
   triggerBlobDownload,
   type ExportPrecheck,
 } from './exportPng';
+import { exportFfePdf } from './exportPdf';
 import { computeFfeBudget, formatCurrency } from './ffeBudget';
 import { exportClientInteractiveHtml } from './exportClientHtml';
 
@@ -122,6 +122,21 @@ export const ExportModal: React.FC<ExportModalProps> = ({
       }
 
       onExported(dict.exportSuccess);
+      onClose();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : dict.exportError);
+    } finally {
+      setExporting(false);
+    }
+  };
+
+  const handleExportPdf = async () => {
+    if (!precheck || precheck.cards.length === 0) return;
+    setExporting(true);
+    setError('');
+    try {
+      await exportFfePdf(project, precheck.cards, dict, profile);
+      onExported(dict.exportPdfSuccess);
       onClose();
     } catch (err) {
       setError(err instanceof Error ? err.message : dict.exportError);
@@ -382,9 +397,9 @@ export const ExportModal: React.FC<ExportModalProps> = ({
                 type="button"
                 className="btn-xs btn-subtle flex-1"
                 disabled={exporting}
-                onClick={() => void openFfePrintSpecWindow(project, precheck.cards, dict, profile)}
+                onClick={() => void handleExportPdf()}
               >
-                <Printer size={13} />
+                {exporting ? <Loader2 size={13} className="spin" /> : <Printer size={13} />}
                 <span>{dict.exportFfePrint}</span>
               </button>
             </div>

@@ -364,8 +364,14 @@ export const vi = {
   ffePriceLabel: 'Đơn giá / Quy cách',
   ffePricePlaceholder: 'VD: 1.850.000đ / m²',
   exportFfeCsv: 'Xuất bảng vật tư (.CSV)',
-  exportFfePrint: 'In hồ sơ vật tư (PDF)',
+  exportFfePrint: 'Tải hồ sơ PDF',
   exportFfeSuccess: 'Đã xuất bảng thông số vật tư FF&E.',
+  exportPdfSuccess: 'Đã tải tệp PDF hồ sơ thiết kế thành công.',
+  colorDetectedLabel: 'Nhận diện màu',
+  colorApplyNameBtn: 'Dùng tên này',
+  colorTempWarm: 'Tông ấm',
+  colorTempCool: 'Tông lạnh',
+  colorTempNeutral: 'Trung tính',
 
   // Phase 4: On-Device AI Cutout & Similarity
   aiCutoutBtn: 'Tách nền AI',
@@ -449,9 +455,9 @@ export const vi = {
   studioLogoUpload: 'Tải logo Studio',
   studioLogoRemove: 'Xóa logo',
   studioCurrencyLabel: 'Đơn vị tiền tệ',
-  exportClientHtmlBtn: 'Xuất bản gửi khách (.html)',
-  exportClientHtmlHint: '1 tệp tương tác chỉ-xem (pan/zoom, bảng FF&E, khách ghi chú góp ý)',
-  exportClientHtmlSuccess: 'Đã xuất bản xem tương tác (.html) gửi khách hàng.',
+  exportClientHtmlBtn: 'Gửi bản duyệt tương tác (Desktop)',
+  exportClientHtmlHint: 'Mở bằng trình duyệt máy tính để khách chấm duyệt & tải thẳng PDF phản hồi / copy Zalo',
+  exportClientHtmlSuccess: 'Đã tải tệp duyệt tương tác (khách mở bằng Chrome/Edge/Safari trên máy tính).',
 
   // Ecosystem Phase 4 (#1): Web Clipper Extension Bridge
   clipperBadgeConnected: 'Web Clipper sẵn sàng',

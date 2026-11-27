@@ -21,6 +21,7 @@ import {
   X,
 } from 'lucide-react';
 import { CATEGORY_ORDER, type Card, type Category } from '../../domain/types';
+import { getRecognizedColorName, isAutoColorTitle, recognizeColor } from '../../domain/colorNaming';
 import { isValidHttpUrl, normalizeHex } from '../../domain/validate';
 import { getCategoryLabel, type I18nDict } from '../../i18n';
 import { AppleSelect, CATEGORY_DOT_COLORS } from '../../components/AppleSelect';
@@ -131,6 +132,22 @@ export const InspectorPanel: React.FC<InspectorPanelProps> = ({
     );
   };
 
+  const lang: 'vi' | 'en' = dict.cancel === 'Hủy' ? 'vi' : 'en';
+  const recognizedColor =
+    card.kind === 'color' ? recognizeColor(normalizeHex(hexInput) ?? card.color ?? '#8D9A7C') : null;
+  const recognizedColorName = recognizedColor
+    ? lang === 'vi'
+      ? recognizedColor.vi
+      : recognizedColor.en
+    : '';
+  const recognizedTempLabel = recognizedColor
+    ? recognizedColor.temperature === 'warm'
+      ? dict.colorTempWarm
+      : recognizedColor.temperature === 'cool'
+        ? dict.colorTempCool
+        : dict.colorTempNeutral
+    : '';
+
   const commitHex = (raw: string) => {
     setHexInput(raw);
     const norm = normalizeHex(raw);
@@ -139,7 +156,11 @@ export const InspectorPanel: React.FC<InspectorPanelProps> = ({
       return;
     }
     setHexError('');
-    onChangeCard(card.id, { color: norm }, true);
+    const patch: Partial<Card> = { color: norm };
+    if (card.kind === 'color' && isAutoColorTitle(card.title, card.color)) {
+      patch.title = getRecognizedColorName(norm, lang);
+    }
+    onChangeCard(card.id, patch, true);
   };
 
   const handleCopyHex = () => {
@@ -223,6 +244,26 @@ export const InspectorPanel: React.FC<InspectorPanelProps> = ({
               </button>
             </div>
             {hexError && <span className="field-error">{hexError}</span>}
+            {!hexError && recognizedColor && (
+              <div
+                className="field-row-between"
+                style={{ marginTop: 4, fontSize: 11.5, color: 'var(--text-secondary)' }}
+              >
+                <span className="truncate">
+                  {dict.colorDetectedLabel}: <strong>{recognizedColorName}</strong> · {recognizedTempLabel}
+                </span>
+                {card.title.trim().toLowerCase() !== recognizedColorName.toLowerCase() && (
+                  <button
+                    type="button"
+                    className="btn-link-xs"
+                    style={{ flexShrink: 0, marginLeft: 6 }}
+                    onClick={() => onChangeCard(card.id, { title: recognizedColorName }, true)}
+                  >
+                    {dict.colorApplyNameBtn}
+                  </button>
+                )}
+              </div>
+            )}
           </div>
         )}
 
@@ -252,7 +293,13 @@ export const InspectorPanel: React.FC<InspectorPanelProps> = ({
                     aria-label={label}
                     className={`swatch-dot ${(card.color || '').toUpperCase() === item.hex ? 'is-active' : ''}`}
                     style={{ backgroundColor: item.hex }}
-                    onClick={() => onChangeCard(card.id, { color: item.hex, textColor: undefined }, true)}
+                    onClick={() => {
+                      const patch: Partial<Card> = { color: item.hex, textColor: undefined };
+                      if (card.kind === 'color' && isAutoColorTitle(card.title, card.color)) {
+                        patch.title = getRecognizedColorName(item.hex, lang);
+                      }
+                      onChangeCard(card.id, patch, true);
+                    }}
                   />
                 );
               })}

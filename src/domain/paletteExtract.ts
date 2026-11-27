@@ -1,10 +1,13 @@
+import { getRecognizedColorName } from './colorNaming';
+
 /**
  * Fast client-side dominant palette extractor & 60-30-10 interior harmony generator
- * using Canvas 2D quantization.
+ * using Canvas 2D quantization + CIE-Lab perceptual color naming.
  */
 export async function extractPaletteFromBlob(
   blob: Blob,
-  count = 3
+  count = 3,
+  lang: 'vi' | 'en' = 'vi'
 ): Promise<Array<{ hex: string; name: string }>> {
   const url = URL.createObjectURL(blob);
   try {
@@ -70,12 +73,12 @@ export async function extractPaletteFromBlob(
       chosen.push(sorted[0]);
     }
 
-    return chosen.map((c, idx) => {
+    return chosen.map((c) => {
       const hex = `#${[c.r, c.g, c.b]
         .map((v) => v.toString(16).padStart(2, '0'))
         .join('')
         .toUpperCase()}`;
-      return { hex, name: `Tone ${idx + 1}` };
+      return { hex, name: getRecognizedColorName(hex, lang) };
     });
   } finally {
     URL.revokeObjectURL(url);
@@ -99,7 +102,8 @@ export async function extractDominantHexFromBlob(blob: Blob): Promise<string | u
  */
 export async function extractBoard60_30_10Palette(
   blobs: Blob[],
-  roleLabels: { role60: string; role30: string; role10: string }
+  roleLabels: { role60: string; role30: string; role10: string },
+  lang: 'vi' | 'en' = 'vi'
 ): Promise<Array<{ hex: string; name: string }>> {
   const globalBuckets = new Map<string, { r: number; g: number; b: number; n: number }>();
 
@@ -182,10 +186,10 @@ export async function extractBoard60_30_10Palette(
   }
 
   const roles = [
-    `${roleLabels.role60} · 01`,
-    `${roleLabels.role60} · 02`,
-    `${roleLabels.role30} · 01`,
-    `${roleLabels.role30} · 02`,
+    roleLabels.role60,
+    roleLabels.role60,
+    roleLabels.role30,
+    roleLabels.role30,
     roleLabels.role10,
   ];
 
@@ -194,7 +198,9 @@ export async function extractBoard60_30_10Palette(
       .map((v) => v.toString(16).padStart(2, '0'))
       .join('')
       .toUpperCase()}`;
-    return { hex, name: roles[idx] ?? `Tone ${idx + 1}` };
+    const colorName = getRecognizedColorName(hex, lang);
+    const role = roles[idx];
+    return { hex, name: role ? `${colorName} (${role.split(' ')[0]})` : colorName };
   });
 }
 

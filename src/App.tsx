@@ -75,6 +75,7 @@ import {
   extractPaletteFromBlob,
   hexColorDistance,
 } from './domain/paletteExtract';
+import { getRecognizedColorName, isAutoColorTitle } from './domain/colorNaming';
 import { getDict, type Language } from './i18n';
 import {
   deleteProject,
@@ -899,7 +900,7 @@ export const App: React.FC = () => {
       if (!activeProject) return;
       mutateProject(activeProject.id, (p) => ({ ...p, appearance }), { recordUndo: false });
     },
-    [activeProject, mutateProject]
+    [activeProject, language, mutateProject]
   );
 
   // Card Creation Helpers
@@ -930,7 +931,7 @@ export const App: React.FC = () => {
       setSelectedIds([card.id]);
       setEditingCardId(card.id);
     },
-    [activeProject, mutateProject]
+    [activeProject, language, mutateProject]
   );
 
   const createColorCard = useCallback(
@@ -941,7 +942,7 @@ export const App: React.FC = () => {
       const card: Card = {
         id: createId('crd'),
         kind: 'color',
-        title: 'Sage',
+        title: getRecognizedColorName('#8D9A7C', language),
         text: '',
         color: '#8D9A7C',
         category: 'palette',
@@ -960,7 +961,7 @@ export const App: React.FC = () => {
       });
       setSelectedIds([card.id]);
     },
-    [activeProject, getViewportCenterWorld, mutateProject]
+    [activeProject, getViewportCenterWorld, language, mutateProject]
   );
 
   // Group / Ungroup
@@ -1075,7 +1076,7 @@ export const App: React.FC = () => {
       );
       setSelectedIds(clones.map((c) => c.id));
     },
-    [activeProject, mutateProject]
+    [activeProject, language, mutateProject]
   );
 
   const handleDeleteIdsToTrash = useCallback(
@@ -1107,7 +1108,7 @@ export const App: React.FC = () => {
       );
       setSelectedIds((prev) => prev.filter((id) => !idSet.has(id)));
     },
-    [activeProject, mutateProject]
+    [activeProject, language, mutateProject]
   );
 
   const handleRestoreFromTrash = useCallback(
@@ -1139,7 +1140,7 @@ export const App: React.FC = () => {
         { recordUndo: true }
       );
     },
-    [activeProject, mutateProject]
+    [activeProject, language, mutateProject]
   );
 
   const handleMoveToInbox = useCallback(
@@ -1161,7 +1162,7 @@ export const App: React.FC = () => {
       setSelectedIds((prev) => prev.filter((id) => !set.has(id)));
       setInboxOpen(true);
     },
-    [activeProject, mutateProject]
+    [activeProject, language, mutateProject]
   );
 
   const handleMoveFromInboxToBoard = useCallback(
@@ -1205,7 +1206,7 @@ export const App: React.FC = () => {
       );
       setSelectedIds([cardId]);
     },
-    [activeProject, getViewportCenterWorld, mutateProject]
+    [activeProject, getViewportCenterWorld, language, mutateProject]
   );
 
   // Capture / Import with pinned projectId & worldPoint (W10!)
@@ -1383,7 +1384,7 @@ export const App: React.FC = () => {
       if (!activeProject || !card.assetId) return;
       const blob = await getAssetBlob(card.assetId, true);
       if (!blob) return;
-      const swatches = await extractPaletteFromBlob(blob, 3);
+      const swatches = await extractPaletteFromBlob(blob, 3, language);
       if (swatches.length === 0) return;
 
       const now = new Date().toISOString();
@@ -1391,7 +1392,7 @@ export const App: React.FC = () => {
       const newCards: Card[] = swatches.map((sw, idx) => ({
         id: createId('crd'),
         kind: 'color',
-        title: `${card.title.slice(0, 14) || 'Swatch'} · ${idx + 1}`,
+        title: sw.name,
         text: '',
         color: sw.hex,
         category: 'palette',
@@ -1412,7 +1413,7 @@ export const App: React.FC = () => {
       );
       setSelectedIds(newCards.map((c) => c.id));
     },
-    [activeProject, mutateProject]
+    [activeProject, language, mutateProject]
   );
 
   // Phase 2.3: Board-wide 60-30-10 Interior Color Rule Palette Generator
@@ -1429,11 +1430,15 @@ export const App: React.FC = () => {
     }
     if (blobs.length === 0) return;
 
-    const swatches = await extractBoard60_30_10Palette(blobs, {
-      role60: dict.role60,
-      role30: dict.role30,
-      role10: dict.role10,
-    });
+    const swatches = await extractBoard60_30_10Palette(
+      blobs,
+      {
+        role60: dict.role60,
+        role30: dict.role30,
+        role10: dict.role10,
+      },
+      language
+    );
     if (swatches.length === 0) return;
 
     const bounds = computeCardsBounds(proj.cards.filter((c) => !c.inbox));
@@ -1467,7 +1472,7 @@ export const App: React.FC = () => {
     );
     setSelectedIds(newCards.map((c) => c.id));
     showToast(dict.boardPaletteCreatedToast);
-  }, [dict, mutateProject, showToast]);
+  }, [dict, language, mutateProject, showToast]);
 
   // Phase 2.3: Native Screen Eyedropper (Chromium EyeDropper API + fallback)
   const handlePickEyedropperColor = useCallback(
@@ -1505,16 +1510,23 @@ export const App: React.FC = () => {
 
       if (!pickedHex) return;
 
+      const detectedName = getRecognizedColorName(pickedHex, language);
+
       if (targetCardId) {
         mutateProject(
           activeProject.id,
           (p) => ({
             ...p,
-            cards: p.cards.map((c) => (c.id === targetCardId ? { ...c, color: pickedHex! } : c)),
+            cards: p.cards.map((c) => {
+              if (c.id !== targetCardId) return c;
+              const nextTitle =
+                c.kind === 'color' && isAutoColorTitle(c.title, c.color) ? detectedName : c.title;
+              return { ...c, color: pickedHex!, title: nextTitle };
+            }),
           }),
           { recordUndo: true }
         );
-        showToast(`${dict.eyedropperFallbackToast} (${pickedHex})`);
+        showToast(`${dict.eyedropperFallbackToast} ${detectedName} (${pickedHex})`);
         return;
       }
 
@@ -1523,7 +1535,7 @@ export const App: React.FC = () => {
       const card: Card = {
         id: createId('crd'),
         kind: 'color',
-        title: pickedHex,
+        title: detectedName,
         text: '',
         color: pickedHex,
         category: 'palette',
@@ -1541,9 +1553,9 @@ export const App: React.FC = () => {
         recordUndo: true,
       });
       setSelectedIds([card.id]);
-      showToast(`${dict.eyedropperFallbackToast} (${pickedHex})`);
+      showToast(`${dict.eyedropperFallbackToast} ${detectedName} (${pickedHex})`);
     },
-    [activeProject, dict, getViewportCenterWorld, mutateProject, selectedIds, showToast]
+    [activeProject, dict, getViewportCenterWorld, language, mutateProject, selectedIds, showToast]
   );
 
   // Phase 4.1: On-Device AI Object Background Removal (Cutout Worker with immediate RAM release)
@@ -1651,7 +1663,7 @@ export const App: React.FC = () => {
         { recordUndo: true }
       );
     },
-    [activeProject, mutateProject]
+    [activeProject, language, mutateProject]
   );
 
   // Phase 1.2: Copy crisp PNG (PURE 'image/png' ClipboardItem so Adobe Illustrator, Photoshop & Canva all paste natively!)
@@ -1801,7 +1813,7 @@ export const App: React.FC = () => {
         { recordUndo: true }
       );
     },
-    [activeProject, mutateProject]
+    [activeProject, language, mutateProject]
   );
 
   const handleRemoveConnector = useCallback(
@@ -1820,7 +1832,7 @@ export const App: React.FC = () => {
         { recordUndo: true }
       );
     },
-    [activeProject, mutateProject]
+    [activeProject, language, mutateProject]
   );
 
   // Card field updates
@@ -1836,7 +1848,7 @@ export const App: React.FC = () => {
         { recordUndo, debounceMs: recordUndo ? 0 : 350 }
       );
     },
-    [activeProject, mutateProject]
+    [activeProject, language, mutateProject]
   );
 
   const handleUpdateNoteText = useCallback(
