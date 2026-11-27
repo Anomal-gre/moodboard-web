@@ -7,6 +7,7 @@ import { computeFfeBudget, formatCurrency } from './ffeBudget';
 import {
   A4_LANDSCAPE_PT,
   A4_PORTRAIT_PT,
+  MOSA_BRAND_LOGO_DATA_URL,
   buildPdfBlob,
   canvasToJpegBytes,
   type PdfJpegPage,
@@ -204,7 +205,7 @@ export async function exportFfePdf(
 
   const [boardImg, logoImg] = await Promise.all([
     loadImage(boardUrl),
-    studioProfile?.studioLogoDataUrl ? loadImage(studioProfile.studioLogoDataUrl) : Promise.resolve(null),
+    loadImage(studioProfile?.studioLogoDataUrl || MOSA_BRAND_LOGO_DATA_URL),
   ]);
 
   const thumbImgs = new Map<string, HTMLImageElement | null>();

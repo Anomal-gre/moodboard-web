@@ -24,6 +24,31 @@ export interface PdfDocumentOptions {
 export const A4_LANDSCAPE_PT = { w: 841.89, h: 595.28 };
 export const A4_PORTRAIT_PT = { w: 595.28, h: 841.89 };
 
+const MOSA_BRAND_SVG =
+  '<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 860 860">' +
+  '<defs>' +
+  '<linearGradient id="g0" x1="458.4" y1="401.5" x2="70.2" y2="13.3" gradientUnits="userSpaceOnUse">' +
+  '<stop offset="0" stop-color="#38bdf8"/><stop offset="1" stop-color="#0a84ff"/>' +
+  '</linearGradient>' +
+  '<linearGradient id="g1" x1="846.7" y1="70.2" x2="458.5" y2="458.4" gradientUnits="userSpaceOnUse">' +
+  '<stop offset="0" stop-color="#0a84ff"/><stop offset="1" stop-color="#38bdf8"/>' +
+  '</linearGradient>' +
+  '<linearGradient id="g2" x1="789.8" y1="846.6" x2="401.6" y2="458.4" gradientUnits="userSpaceOnUse">' +
+  '<stop offset="0" stop-color="#0a84ff"/><stop offset="1" stop-color="#38bdf8"/>' +
+  '</linearGradient>' +
+  '<linearGradient id="g3" x1="13.4" y1="789.8" x2="401.6" y2="401.6" gradientUnits="userSpaceOnUse">' +
+  '<stop offset="0" stop-color="#0a84ff"/><stop offset="1" stop-color="#38bdf8"/>' +
+  '</linearGradient>' +
+  '</defs>' +
+  '<path fill="url(#g0)" d="M430,430h-194.1c-107.1,0-194.1-87-194.1-194.1V41.8h388.2v388.2h0Z"/>' +
+  '<path fill="url(#g1)" d="M818.1,430h-388.1v-194.1c0-107.1,87-194.1,194.1-194.1h194.1v388.2h0Z"/>' +
+  '<path fill="url(#g2)" d="M430,430h194.1c107.1,0,194.1,87,194.1,194.1v194.1h-388.1v-388.1h0Z"/>' +
+  '<path fill="url(#g3)" d="M41.9,430h388.1v194.1c0,107.1-87,194.1-194.1,194.1H41.8v-388.1h.1Z"/>' +
+  '</svg>';
+
+/** Portable self-contained Data URL of Mosa's official brand favicon/logo (works offline in HTML & Canvas PDF). */
+export const MOSA_BRAND_LOGO_DATA_URL = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(MOSA_BRAND_SVG)}`;
+
 const encoder = new TextEncoder();
 
 function asciiBytes(str: string): Uint8Array {

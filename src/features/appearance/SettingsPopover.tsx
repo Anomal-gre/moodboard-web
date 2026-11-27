@@ -10,10 +10,12 @@ interface SettingsPopoverProps {
   onOpenChange: (nextOpen: boolean) => void;
   appearance: ProjectAppearance;
   language: Language;
+  radialMenuEnabled: boolean;
   syncFolderName?: string | null;
   dict: I18nDict;
   onChangeAppearance: (next: ProjectAppearance) => void;
   onChangeLanguage: (lang: Language) => void;
+  onChangeRadialMenuEnabled: (enabled: boolean) => void;
   onOpenStorageHub: () => void;
 }
 
@@ -22,10 +24,12 @@ export const SettingsPopover: React.FC<SettingsPopoverProps> = ({
   onOpenChange,
   appearance,
   language,
+  radialMenuEnabled,
   syncFolderName,
   dict,
   onChangeAppearance,
   onChangeLanguage,
+  onChangeRadialMenuEnabled,
   onOpenStorageHub,
 }) => {
   const [hexValue, setHexValue] = useState(appearance.background);
@@ -151,6 +155,25 @@ export const SettingsPopover: React.FC<SettingsPopoverProps> = ({
               </button>
             </div>
           </div>
+
+          <div className="popover-divider" />
+
+          <div className="popover-section-label">{dict.experimentalSection}</div>
+
+          <label className="toggle-row">
+            <span className="toggle-label-with-badge">
+              <span>{dict.radialMenuToggle}</span>
+              <span className="beta-pill">BETA</span>
+            </span>
+            <input
+              type="checkbox"
+              checked={radialMenuEnabled}
+              onChange={(e) => onChangeRadialMenuEnabled(e.target.checked)}
+            />
+          </label>
+          <p className="field-hint" style={{ marginTop: -2 }}>
+            {dict.radialMenuHint}
+          </p>
 
           <div className="popover-divider" />
 

@@ -150,6 +150,7 @@ export interface WorkspaceMeta {
   onboardingCompleted?: boolean;
   userDiscipline?: UserDiscipline;
   navigationMode?: NavigationMode;
+  radialMenuEnabled?: boolean;
 }
 
 export type ArrangeMode = 'bento' | 'freeform' | 'zones' | 'grid';

@@ -5,6 +5,7 @@ import type { I18nDict } from '../../i18n';
 import { getCategoryLabel } from '../../i18n';
 import { computeFfeBudget, formatCurrency } from './ffeBudget';
 import { slugifyFileName, triggerBlobDownload } from './exportPng';
+import { MOSA_BRAND_LOGO_DATA_URL } from './pdfWriter';
 
 function blobToDataUrl(blob: Blob): Promise<string> {
   return new Promise((resolve, reject) => {
@@ -79,7 +80,12 @@ export async function exportClientInteractiveHtml(
 
   const studioName = studioProfile?.studioName?.trim() || 'Mosa';
   const studioContact = studioProfile?.studioContact?.trim() || '';
-  const studioLogo = studioProfile?.studioLogoDataUrl || '';
+  const studioLogo = studioProfile?.studioLogoDataUrl || MOSA_BRAND_LOGO_DATA_URL;
+  const faviconMime = studioLogo.startsWith('data:image/svg+xml')
+    ? 'image/svg+xml'
+    : studioLogo.startsWith('data:image/png')
+      ? 'image/png'
+      : 'image/jpeg';
   const slug = slugifyFileName(project.name);
 
   const ui = isVi
@@ -208,6 +214,8 @@ export async function exportClientInteractiveHtml(
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1" />
+<link rel="icon" type="${faviconMime}" href="${escapeHtml(studioLogo)}" />
+<link rel="shortcut icon" type="${faviconMime}" href="${escapeHtml(studioLogo)}" />
 <title>${escapeHtml(studioName)} · ${escapeHtml(project.name)}</title>
 <style>
   * { box-sizing: border-box; }
@@ -533,7 +541,8 @@ function buildPdfFromJpegs(pages, commentMeta) {
     pushS('endstream\\nendobj\\n');
   }
   offsets[infoId] = offset;
-  pushS(infoId + ' 0 obj\\n<< /Title (Mosa Client Review Report) /Producer (Mosa Studio Smart PDF) >>\\nendobj\\n');
+  const safePdfTitle = String((DATA.studioName || 'Mosa') + ' - ' + (DATA.projectName || 'Review')).normalize('NFKD').replace(/[\\u0300-\\u036f]/g, '').replace(/đ/g, 'd').replace(/Đ/g, 'D').replace(/[^\\x20-\\x7E]/g, ' ').replace(/[\\\\()]/g, '').trim() || 'Mosa Client Review Report';
+  pushS(infoId + ' 0 obj\\n<< /Title (' + safePdfTitle + ') /Producer (Mosa Studio Smart PDF) >>\\nendobj\\n');
   const xrefOff = offset;
   pushS('xref\\n0 ' + (infoId + 1) + '\\n0000000000 65535 f \\n');
   for (let id = 1; id <= infoId; id++) pushS(String(offsets[id]).padStart(10, '0') + ' 00000 n \\n');

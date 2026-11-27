@@ -102,6 +102,7 @@ import { ProjectConflictError } from './storage/projectWrites';
 import { useProjectPersistence } from './storage/useProjectPersistence';
 import { BoardViewport } from './board/BoardViewport';
 import { CanvasContextMenu, type ContextMenuState } from './board/CanvasContextMenu';
+import { RadialWheelMenu, type RadialMenuState } from './board/RadialWheelMenu';
 import { SelectionOverlay } from './board/SelectionOverlay';
 import { useBoardInteractions } from './board/useBoardInteractions';
 import { ProjectMenu } from './features/projects/ProjectMenu';
@@ -208,6 +209,7 @@ export const App: React.FC = () => {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [moreMenuOpen, setMoreMenuOpen] = useState(false);
   const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null);
+  const [radialMenu, setRadialMenu] = useState<RadialMenuState | null>(null);
   const [presentMode, setPresentMode] = useState(false);
   const prePresentViewRef = useRef<ProjectView | null>(null);
 
@@ -679,6 +681,22 @@ export const App: React.FC = () => {
       void saveWorkspaceMeta(nextMeta);
     },
     [meta]
+  );
+
+  const radialMenuEnabled = Boolean(meta?.radialMenuEnabled);
+
+  const handleChangeRadialMenuEnabled = useCallback(
+    (enabled: boolean) => {
+      if (!meta) return;
+      const nextMeta: WorkspaceMeta = { ...meta, radialMenuEnabled: enabled };
+      setMeta(nextMeta);
+      void saveWorkspaceMeta(nextMeta);
+      setContextMenu(null);
+      setRadialMenu(null);
+      if (enabled) setShortcutsOpen(false);
+      showToast(enabled ? dict.radialMenuEnabledToast : dict.radialMenuDisabledToast);
+    },
+    [dict, meta, showToast]
   );
 
   const handleOpenProjectHub = useCallback(() => {
@@ -2782,6 +2800,29 @@ export const App: React.FC = () => {
         draft={interactions.draft}
         dict={dict}
         onPointerDown={(e) => {
+          if (
+            radialMenuEnabled &&
+            e.button === 2 &&
+            !presentMode &&
+            interactions.draft?.mode !== 'sticky-move'
+          ) {
+            e.preventDefault();
+            setMoreMenuOpen(false);
+            setSettingsOpen(false);
+            setContextMenu(null);
+            const rect = boardRef.current?.getBoundingClientRect();
+            const screenPt = rect
+              ? { x: e.clientX - rect.left, y: e.clientY - rect.top }
+              : { x: e.clientX, y: e.clientY };
+            setRadialMenu({
+              screenX: e.clientX,
+              screenY: e.clientY,
+              worldPoint: screenToWorld(screenPt, activeProject.view),
+              targetCardId: null,
+              openedAt: performance.now(),
+            });
+            return;
+          }
           if (connectMode && e.button === 0 && !interactions.spacePressed) {
             if (connectSourceId) {
               setConnectSourceId(null);
@@ -2809,6 +2850,7 @@ export const App: React.FC = () => {
         onPointerCancel={interactions.handlePointerCancel}
         onDoubleClick={interactions.handleBoardDoubleClick}
         onBoardContextMenu={(e, worldPoint) => {
+          if (radialMenuEnabled) return;
           setMoreMenuOpen(false);
           setContextMenu({
             screenX: e.clientX,
@@ -2818,6 +2860,30 @@ export const App: React.FC = () => {
           });
         }}
         onCardPointerDown={(e, card) => {
+          if (
+            radialMenuEnabled &&
+            e.button === 2 &&
+            !presentMode &&
+            interactions.draft?.mode !== 'sticky-move' &&
+            editingCardId !== card.id
+          ) {
+            e.preventDefault();
+            e.stopPropagation();
+            setMoreMenuOpen(false);
+            setSettingsOpen(false);
+            setContextMenu(null);
+            if (!selectedIds.includes(card.id)) {
+              setSelectedIds([card.id]);
+            }
+            setRadialMenu({
+              screenX: e.clientX,
+              screenY: e.clientY,
+              worldPoint: { x: card.x, y: card.y },
+              targetCardId: card.id,
+              openedAt: performance.now(),
+            });
+            return;
+          }
           if (connectMode && e.button === 0 && !interactions.spacePressed) {
             e.stopPropagation();
             if (card.kind === 'frame') return;
@@ -2846,6 +2912,7 @@ export const App: React.FC = () => {
         onCardContextMenu={(e, card) => {
           e.preventDefault();
           e.stopPropagation();
+          if (radialMenuEnabled) return;
           if (presentMode || interactions.draft?.mode === 'sticky-move') return;
           setMoreMenuOpen(false);
           if (!selectedIds.includes(card.id)) {
@@ -3041,10 +3108,12 @@ export const App: React.FC = () => {
                 }}
                 appearance={activeProject.appearance}
                 language={language}
+                radialMenuEnabled={radialMenuEnabled}
                 syncFolderName={syncFolderHandle?.name ?? null}
                 dict={dict}
                 onChangeAppearance={handleChangeAppearance}
                 onChangeLanguage={handleChangeLanguage}
+                onChangeRadialMenuEnabled={handleChangeRadialMenuEnabled}
                 onOpenStorageHub={() => setBackupOpen(true)}
               />
 
@@ -3190,20 +3259,23 @@ export const App: React.FC = () => {
           )}
 
           <footer className="workspace-footer">
-            <button
-              type="button"
-              className={`shortcuts-corner-btn ${shortcutsOpen ? 'is-active' : ''}`}
-              title={dict.shortcuts}
-              aria-label={dict.shortcuts}
-              aria-expanded={shortcutsOpen}
-              onClick={() => setShortcutsOpen((v) => !v)}
-            >
-              <Keyboard size={14} />
-              <span>{dict.shortcuts}</span>
-            </button>
+            {!radialMenuEnabled && (
+              <button
+                type="button"
+                className={`shortcuts-corner-btn ${shortcutsOpen ? 'is-active' : ''}`}
+                title={dict.shortcuts}
+                aria-label={dict.shortcuts}
+                aria-expanded={shortcutsOpen}
+                onClick={() => setShortcutsOpen((v) => !v)}
+              >
+                <Keyboard size={14} />
+                <span>{dict.shortcuts}</span>
+              </button>
+            )}
 
-            {/* Bottom-center Creation Dock */}
-            <nav className="bottom-dock" aria-label={dict.creationTools}>
+            {/* Bottom-center Creation Dock (hidden in Zen Radial Wheel mode) */}
+            {!radialMenuEnabled && (
+              <nav className="bottom-dock" aria-label={dict.creationTools}>
               <button
                 type="button"
                 className="dock-btn btn-primary dock-btn--primary"
@@ -3295,7 +3367,8 @@ export const App: React.FC = () => {
               >
                 <Redo2 size={16} />
               </button>
-            </nav>
+              </nav>
+            )}
 
             {/* Bottom-right Zoom Bar */}
             <div className="zoom-bar">
@@ -3469,7 +3542,7 @@ export const App: React.FC = () => {
       />
 
       {/* Native Apple-style Canvas & Card Right-Click Context Menu */}
-      {!presentMode && (
+      {!presentMode && !radialMenuEnabled && (
         <CanvasContextMenu
           menu={contextMenu}
           cards={activeProject.cards}
@@ -3527,6 +3600,82 @@ export const App: React.FC = () => {
           onZoomReset={handleZoomReset}
           onUndo={handleUndo}
           onRedo={handleRedo}
+        />
+      )}
+
+      {/* Experimental Context-Aware Radial Wheel Menu */}
+      {!presentMode && radialMenuEnabled && (
+        <RadialWheelMenu
+          menu={radialMenu}
+          cards={activeProject.cards}
+          selectedIds={selectedIds}
+          canUndo={canUndo}
+          canRedo={canRedo}
+          connectMode={connectMode}
+          dict={dict}
+          onClose={() => setRadialMenu(null)}
+          onCreateNoteAt={createNoteAt}
+          onTriggerAddFiles={() => filePickerRef.current?.click()}
+          onCreateColorAt={(pt) => createColorCard(pt)}
+          onOpenAddLink={() => setAddLinkOpen(true)}
+          onOpenArrange={() => setArrangeOpen(true)}
+          onToggleConnectMode={() => {
+            if (connectMode) {
+              setConnectMode(false);
+              setConnectSourceId(null);
+              setConnectCursorWorld(null);
+              return;
+            }
+            if (selectedIds.length >= 2) {
+              handleConnectSelected();
+              return;
+            }
+            setConnectMode(true);
+            const single =
+              selectedIds.length === 1
+                ? activeProject.cards.find((c) => c.id === selectedIds[0] && c.kind !== 'frame')
+                : null;
+            setConnectSourceId(single ? single.id : null);
+            setConnectCursorWorld(null);
+          }}
+          onUndo={handleUndo}
+          onRedo={handleRedo}
+          onOpenLightbox={(c) => setLightboxCardId(c.id)}
+          onRunAiCutout={(c) => void handleRunAiCutout(c)}
+          onRestoreOriginalBg={handleRestoreOriginalBg}
+          onToggleCrop={(id) => {
+            setCroppingCardId((prev) => {
+              if (prev === id) return null;
+              const target = activeProject.cards.find((it) => it.id === id);
+              if (target && !target.crop) {
+                handleChangeCard(id, { crop: { x: 0.08, y: 0.08, w: 0.84, h: 0.84 } }, true);
+              }
+              return id;
+            });
+          }}
+          onExtractPalette={(c) => void handleExtractPalette(c)}
+          onStartConnectFrom={(cardId) => {
+            setConnectMode(true);
+            setConnectSourceId(cardId);
+            const target = activeProject.cards.find((it) => it.id === cardId);
+            if (target) {
+              setConnectCursorWorld({ x: target.x + target.w / 2, y: target.y + target.h / 2 });
+            }
+          }}
+          onConnectSelected={handleConnectSelected}
+          onEditNote={(id) => setEditingCardId(id)}
+          onCopyHex={(hex) => {
+            navigator.clipboard?.writeText(hex).catch(() => undefined);
+            showToast(`${dict.copiedHex}: ${hex}`);
+          }}
+          onOpenFileCard={(c) => void handleOpenFileCard(c)}
+          onDuplicate={handleDuplicateIds}
+          onToggleLock={handleToggleLockSelected}
+          onGroup={handleGroupSelected}
+          onUngroup={handleUngroup}
+          onAlign={handleAlign}
+          onMoveToInbox={handleMoveToInbox}
+          onDelete={handleDeleteIdsToTrash}
         />
       )}
 
