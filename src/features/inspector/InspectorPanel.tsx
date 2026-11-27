@@ -34,6 +34,7 @@ interface InspectorPanelProps {
   onClose: () => void;
   onChangeCard: (cardId: string, patch: Partial<Card>, recordUndo?: boolean) => void;
   onToggleCrop: (cardId: string) => void;
+  onResetCrop: (cardId: string) => void;
   onRunAiCutout: (card: Card) => void;
   onRestoreOriginalBg: (card: Card) => void;
   onCopyImageForApps: (card: Card) => void;
@@ -71,6 +72,7 @@ export const InspectorPanel: React.FC<InspectorPanelProps> = ({
   onClose,
   onChangeCard,
   onToggleCrop,
+  onResetCrop,
   onRunAiCutout,
   onRestoreOriginalBg,
   onCopyImageForApps,
@@ -377,7 +379,7 @@ export const InspectorPanel: React.FC<InspectorPanelProps> = ({
                   <button
                     type="button"
                     className="btn-xs btn-subtle flex-1"
-                    onClick={() => onChangeCard(card.id, { crop: undefined }, true)}
+                    onClick={() => onResetCrop(card.id)}
                   >
                     <RotateCcw size={12} />
                     <span>{dict.cropReset}</span>

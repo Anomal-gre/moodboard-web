@@ -2585,6 +2585,7 @@ textarea:focus-visible {
   height: 100%;
   overflow: hidden;
   position: relative;
+  border-radius: inherit;
 }
 
 .drag-out-chip {
@@ -2595,57 +2596,256 @@ textarea:focus-visible {
   cursor: grabbing;
 }
 
+.board-card.is-cropping {
+  z-index: 9000 !important;
+  overflow: visible !important;
+}
+
+.board-card.is-cropping .image-card-inner {
+  overflow: visible !important;
+}
+
 .crop-overlay {
   position: absolute;
   inset: 0;
-  background: rgba(0, 0, 0, 0.44);
+  overflow: visible;
+  border-radius: inherit;
+  background: transparent;
   z-index: 15;
+}
+
+.crop-dim-mask {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  border-radius: inherit;
+  pointer-events: none;
+}
+
+.crop-dim-cutout {
+  position: absolute;
+  box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.56);
 }
 
 .crop-frame-box {
   position: absolute;
-  border: 2px solid #ffffff;
-  box-shadow: 0 0 0 999px rgba(0, 0, 0, 0.36), 0 0 0 1px rgba(0, 0, 0, 0.4);
+  border: 1.5px solid #ffffff;
+  box-shadow:
+    0 0 0 1px rgba(0, 0, 0, 0.34),
+    inset 0 0 0 1px rgba(0, 0, 0, 0.16);
   cursor: move;
+  box-sizing: border-box;
 }
 
-.crop-handle {
+/* 3x3 Rule-of-Thirds composition grid inside kept bright area */
+.crop-thirds-grid {
   position: absolute;
-  width: 12px;
-  height: 12px;
-  border-radius: 3px;
+  inset: 0;
+  pointer-events: none;
+}
+
+.crop-third-v,
+.crop-third-h {
+  position: absolute;
+  background: rgba(255, 255, 255, 0.38);
+  box-shadow: 0 0 1px rgba(0, 0, 0, 0.25);
+}
+
+.crop-third-v {
+  top: 0;
+  bottom: 0;
+  width: 1px;
+}
+
+.crop-third-v--1 { left: 33.333%; }
+.crop-third-v--2 { left: 66.666%; }
+
+.crop-third-h {
+  left: 0;
+  right: 0;
+  height: 1px;
+}
+
+.crop-third-h--1 { top: 33.333%; }
+.crop-third-h--2 { top: 66.666%; }
+
+/* 4 Side Edge Pill Bars (Figma / Canva / Photoshop style) */
+.crop-edge {
+  position: absolute;
+  z-index: 4;
+}
+
+.crop-edge::after {
+  content: '';
+  position: absolute;
   background: #ffffff;
-  border: 1.5px solid var(--accent);
+  border-radius: 999px;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.45), 0 0 0 1px rgba(0, 0, 0, 0.16);
 }
 
-.crop-handle--nw {
-  left: -6px;
-  top: -6px;
-  cursor: nwse-resize;
+.crop-edge--n,
+.crop-edge--s {
+  left: 16px;
+  right: 16px;
+  height: 14px;
+  cursor: ns-resize;
 }
 
-.crop-handle--se {
-  right: -6px;
-  bottom: -6px;
-  cursor: nwse-resize;
+.crop-edge--n { top: -7px; }
+.crop-edge--s { bottom: -7px; }
+
+.crop-edge--n::after,
+.crop-edge--s::after {
+  left: 50%;
+  top: 50%;
+  width: min(32px, 45%);
+  height: 4px;
+  transform: translate(-50%, -50%);
 }
 
-.crop-done-btn {
+.crop-edge--w,
+.crop-edge--e {
+  top: 16px;
+  bottom: 16px;
+  width: 14px;
+  cursor: ew-resize;
+}
+
+.crop-edge--w { left: -7px; }
+.crop-edge--e { right: -7px; }
+
+.crop-edge--w::after,
+.crop-edge--e::after {
+  left: 50%;
+  top: 50%;
+  width: 4px;
+  height: min(32px, 45%);
+  transform: translate(-50%, -50%);
+}
+
+/* 4 Corner L-Bracket Handles (Photoshop / Figma style) */
+.crop-corner {
   position: absolute;
-  right: 6px;
-  bottom: 6px;
+  width: 20px;
+  height: 20px;
+  z-index: 5;
+}
+
+.crop-corner::before,
+.crop-corner::after {
+  content: '';
+  position: absolute;
+  background: #ffffff;
+  border-radius: 2px;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.5);
+}
+
+.crop-corner--nw { left: -4px; top: -4px; cursor: nwse-resize; }
+.crop-corner--nw::before { left: 1px; top: 1px; width: 15px; height: 3.5px; }
+.crop-corner--nw::after  { left: 1px; top: 1px; width: 3.5px; height: 15px; }
+
+.crop-corner--ne { right: -4px; top: -4px; cursor: nesw-resize; }
+.crop-corner--ne::before { right: 1px; top: 1px; width: 15px; height: 3.5px; }
+.crop-corner--ne::after  { right: 1px; top: 1px; width: 3.5px; height: 15px; }
+
+.crop-corner--sw { left: -4px; bottom: -4px; cursor: nesw-resize; }
+.crop-corner--sw::before { left: 1px; bottom: 1px; width: 15px; height: 3.5px; }
+.crop-corner--sw::after  { left: 1px; bottom: 1px; width: 3.5px; height: 15px; }
+
+.crop-corner--se { right: -4px; bottom: -4px; cursor: nwse-resize; }
+.crop-corner--se::before { right: 1px; bottom: 1px; width: 15px; height: 3.5px; }
+.crop-corner--se::after  { right: 1px; bottom: 1px; width: 3.5px; height: 15px; }
+
+/* Floating macOS Glass Crop Toolbar below image */
+.crop-floating-bar {
+  position: absolute;
+  left: 50%;
+  top: calc(100% + 12px);
+  transform-origin: top center;
+  z-index: 30;
   display: inline-flex;
   align-items: center;
-  gap: 4px;
-  padding: 3px 8px;
-  border-radius: var(--radius-pill);
+  gap: 5px;
+  padding: 5px 7px;
+  border-radius: 14px;
+  background: var(--glass-popover);
+  backdrop-filter: var(--glass-blur-heavy);
+  -webkit-backdrop-filter: var(--glass-blur-heavy);
+  border: 1px solid var(--glass-border);
+  box-shadow: var(--shadow-lg), var(--glass-rim);
+  white-space: nowrap;
+}
+
+.crop-ratio-group {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.crop-bar-chip {
   border: none;
+  background: transparent;
+  color: var(--ink-muted);
+  font-size: 11px;
+  font-weight: 600;
+  padding: 4px 7px;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: background var(--dur-fast), color var(--dur-fast);
+}
+
+.crop-bar-chip:hover {
+  background: var(--surface-hover);
+  color: var(--ink);
+}
+
+.crop-bar-chip.is-active {
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+.theme-dark .crop-bar-chip.is-active {
+  background: rgba(59, 130, 246, 0.28);
+  color: #8cc0ff;
+}
+
+.crop-bar-sep {
+  width: 1px;
+  height: 16px;
+  background: var(--border);
+  margin: 0 2px;
+}
+
+.crop-bar-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  height: 26px;
+  min-width: 26px;
+  padding: 0 7px;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--ink);
+  font-size: 11.5px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background var(--dur-fast);
+}
+
+.crop-bar-btn:hover {
+  background: var(--surface-hover);
+}
+
+.crop-bar-btn--done {
   background: var(--accent);
   color: var(--on-accent);
-  font-size: 11px;
-  font-weight: 650;
-  cursor: pointer;
-  box-shadow: var(--shadow-sm);
+  padding: 0 10px;
+}
+
+.crop-bar-btn--done:hover {
+  background: var(--accent-hover);
 }
 
 .board-connectors-svg {

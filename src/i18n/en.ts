@@ -351,7 +351,8 @@ export const en: I18nDict = {
 
   cropImage: 'Crop frame',
   cropReset: 'Reset original',
-  cropDone: 'Finish crop',
+  cropDone: 'Done',
+  cropFree: 'Free',
   flipHorizontal: 'Flip horizontal',
   grayscaleMode: 'Value check (Grayscale)',
   eyedropperBtn: 'Pick color from screen',

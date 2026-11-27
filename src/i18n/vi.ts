@@ -373,7 +373,8 @@ export const vi = {
   // Phase 2: PureRef & Eagle Visual Tools (Crop, Flip, Grayscale, Eyedropper, 60-30-10 Palette, Smart Filter)
   cropImage: 'Cắt khung',
   cropReset: 'Khôi phục gốc',
-  cropDone: 'Xong cắt khung',
+  cropDone: 'Xong',
+  cropFree: 'Tự do',
   flipHorizontal: 'Lật ngang',
   grayscaleMode: 'Soi sắc độ (Trắng-Đen)',
   eyedropperBtn: 'Chấm hút màu màn hình',

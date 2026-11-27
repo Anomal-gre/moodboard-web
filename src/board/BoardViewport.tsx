@@ -1,6 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import { ImagePlus, Move, MoveUpRight } from 'lucide-react';
 import type { Card, ProjectAppearance, ProjectView } from '../domain/types';
+import type { CropRect } from '../domain/cropGeometry';
 import {
   computeConnectorCurve,
   computeConnectorToPoint,
@@ -14,6 +15,12 @@ import type { I18nDict } from '../i18n';
 import { CardView } from './CardView';
 import type { DragDraft } from './useBoardInteractions';
 
+export interface ActiveCropSession {
+  cardId: string;
+  fullFrame: Rect;
+  draftCrop: CropRect;
+}
+
 interface BoardViewportProps {
   boardRef: React.RefObject<HTMLDivElement | null>;
   viewportSize: { width: number; height: number };
@@ -22,7 +29,7 @@ interface BoardViewportProps {
   view: ProjectView;
   selectedIds: string[];
   editingCardId: string | null;
-  croppingCardId: string | null;
+  cropSession: ActiveCropSession | null;
   highlightedCardId: string | null;
   dimmedCardIds: Set<string> | null;
   connectMode: boolean;
@@ -44,8 +51,9 @@ interface BoardViewportProps {
   onCardContextMenu: (e: React.MouseEvent, card: Card) => void;
   onResizePointerDown: (e: React.PointerEvent, card: Card) => void;
   onUpdateCardText: (cardId: string, text: string) => void;
-  onChangeCrop: (cardId: string, crop: { x: number; y: number; w: number; h: number }) => void;
+  onChangeCrop: (crop: CropRect) => void;
   onFinishCrop: () => void;
+  onCancelCrop: () => void;
   onFinishEdit: () => void;
   onRemoveConnector: (srcId: string, dstId: string) => void;
   onOpenLightbox: (card: Card) => void;
@@ -66,7 +74,7 @@ export const BoardViewport: React.FC<BoardViewportProps> = ({
   view,
   selectedIds,
   editingCardId,
-  croppingCardId,
+  cropSession,
   highlightedCardId,
   dimmedCardIds,
   connectMode,
@@ -90,6 +98,7 @@ export const BoardViewport: React.FC<BoardViewportProps> = ({
   onUpdateCardText,
   onChangeCrop,
   onFinishCrop,
+  onCancelCrop,
   onFinishEdit,
   onRemoveConnector,
   onOpenLightbox,
@@ -230,7 +239,13 @@ export const BoardViewport: React.FC<BoardViewportProps> = ({
                 draft.movableIds?.has(card.id)
             );
 
-          if (
+          const isCardCropping = cropSession?.cardId === card.id;
+          if (isCardCropping && cropSession) {
+            displayX = cropSession.fullFrame.x;
+            displayY = cropSession.fullFrame.y;
+            displayW = cropSession.fullFrame.w;
+            displayH = cropSession.fullFrame.h;
+          } else if (
             (draft?.mode === 'move' || draft?.mode === 'sticky-move') &&
             draft.deltaWorld &&
             draft.movableIds?.has(card.id)
@@ -254,10 +269,12 @@ export const BoardViewport: React.FC<BoardViewportProps> = ({
               displayY={displayY}
               displayW={displayW}
               displayH={displayH}
+              zoom={view.zoom}
               selected={selectedSet.has(card.id) || connectSourceId === card.id}
               singleSelected={!connectMode && selectedIds.length === 1 && selectedSet.has(card.id)}
               isEditing={editingCardId === card.id}
-              isCropping={croppingCardId === card.id}
+              isCropping={isCardCropping}
+              draftCrop={isCardCropping ? cropSession?.draftCrop ?? null : null}
               isHighlighted={highlightedCardId === card.id}
               isDimmed={Boolean(dimmedCardIds?.has(card.id))}
               isMoving={isCardMoving}
@@ -271,6 +288,7 @@ export const BoardViewport: React.FC<BoardViewportProps> = ({
               onUpdateCardText={onUpdateCardText}
               onChangeCrop={onChangeCrop}
               onFinishCrop={onFinishCrop}
+              onCancelCrop={onCancelCrop}
               onFinishEdit={onFinishEdit}
               onOpenLightbox={onOpenLightbox}
               onOpenFileCard={onOpenFileCard}

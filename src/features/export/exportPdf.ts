@@ -1,4 +1,5 @@
 import { computeCardsBounds } from '../../domain/geometry';
+import { isFullCrop } from '../../domain/cropGeometry';
 import type { Card, Project, StudioProfile } from '../../domain/types';
 import { getCategoryLabel, type I18nDict } from '../../i18n';
 import { resolveAssetUrl } from '../../storage/workspaceRepository';
@@ -438,13 +439,44 @@ export async function exportFfePdf(
         const swColor = c.color || c.dominantHex;
 
         if (imgEl && imgEl.naturalWidth > 0) {
-          const coverScale = Math.max(thumbSize / imgEl.naturalWidth, thumbSize / imgEl.naturalHeight);
-          const sw = imgEl.naturalWidth * coverScale;
-          const sh = imgEl.naturalHeight * coverScale;
+          const activeCrop = c.crop && !isFullCrop(c.crop) ? c.crop : null;
+          const srcX = activeCrop ? activeCrop.x * imgEl.naturalWidth : 0;
+          const srcY = activeCrop ? activeCrop.y * imgEl.naturalHeight : 0;
+          const srcW = activeCrop ? Math.max(1, activeCrop.w * imgEl.naturalWidth) : imgEl.naturalWidth;
+          const srcH = activeCrop ? Math.max(1, activeCrop.h * imgEl.naturalHeight) : imgEl.naturalHeight;
+          const coverScale = Math.max(thumbSize / srcW, thumbSize / srcH);
+          const sw = srcW * coverScale;
+          const sh = srcH * coverScale;
           ctx.save();
           drawRoundedRect(ctx, tx, ty, thumbSize, thumbSize, 10);
           ctx.clip();
-          ctx.drawImage(imgEl, tx + (thumbSize - sw) / 2, ty + (thumbSize - sh) / 2, sw, sh);
+          if (c.flipH) {
+            ctx.translate(tx + thumbSize, ty);
+            ctx.scale(-1, 1);
+            ctx.drawImage(
+              imgEl,
+              srcX,
+              srcY,
+              srcW,
+              srcH,
+              (thumbSize - sw) / 2,
+              (thumbSize - sh) / 2,
+              sw,
+              sh
+            );
+          } else {
+            ctx.drawImage(
+              imgEl,
+              srcX,
+              srcY,
+              srcW,
+              srcH,
+              tx + (thumbSize - sw) / 2,
+              ty + (thumbSize - sh) / 2,
+              sw,
+              sh
+            );
+          }
           ctx.restore();
           ctx.strokeStyle = '#E5E7EB';
           ctx.lineWidth = 1.5;

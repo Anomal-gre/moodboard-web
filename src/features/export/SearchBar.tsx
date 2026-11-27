@@ -17,6 +17,7 @@ interface SearchBarProps {
   duplicateIds: Set<string>;
   onChangeFilter: (next: BoardFilterState) => void;
   onSelectResult: (card: Card) => void;
+  onOpenDropdown?: () => void;
 }
 
 export const SearchBar: React.FC<SearchBarProps> = ({
@@ -26,6 +27,7 @@ export const SearchBar: React.FC<SearchBarProps> = ({
   duplicateIds,
   onChangeFilter,
   onSelectResult,
+  onOpenDropdown,
 }) => {
   const [query, setQuery] = useState('');
   const [focused, setFocused] = useState(false);
@@ -95,15 +97,24 @@ export const SearchBar: React.FC<SearchBarProps> = ({
       }}
       onKeyDown={(e) => {
         if (e.key !== 'Escape' || e.nativeEvent.isComposing) return;
+        e.stopPropagation();
         if (query || hasActiveFilter) {
-          e.stopPropagation();
           setQuery('');
           onChangeFilter({ category: null, colorHex: null, duplicatesOnly: false });
           inputRef.current?.focus();
+        } else {
+          setFocused(false);
+          inputRef.current?.blur();
         }
       }}
     >
-      <div className={`search-pill ${hasActiveFilter ? 'has-active-filter' : ''}`}>
+      <div
+        className={`search-pill ${hasActiveFilter ? 'has-active-filter' : ''}`}
+        onMouseDown={() => {
+          onOpenDropdown?.();
+          setFocused(true);
+        }}
+      >
         <Search size={16} className="muted-icon" aria-hidden="true" />
         <input
           ref={inputRef}
@@ -111,8 +122,12 @@ export const SearchBar: React.FC<SearchBarProps> = ({
           aria-label={dict.searchPlaceholder}
           placeholder={dict.searchPlaceholder}
           value={query}
-          onFocus={() => setFocused(true)}
+          onFocus={() => {
+            onOpenDropdown?.();
+            setFocused(true);
+          }}
           onChange={(e) => {
+            onOpenDropdown?.();
             setQuery(e.target.value);
             setFocused(true);
           }}

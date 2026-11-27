@@ -1,5 +1,7 @@
 import type { Card, Project, StudioProfile } from '../../domain/types';
 import { computeCardsBounds, computeConnectorCurve } from '../../domain/geometry';
+import { isFullCrop } from '../../domain/cropGeometry';
+import { decodeImageElement } from '../../storage/assets';
 import { getAssetBlob } from '../../storage/workspaceRepository';
 import type { I18nDict } from '../../i18n';
 import { getCategoryLabel } from '../../i18n';
@@ -14,6 +16,36 @@ function blobToDataUrl(blob: Blob): Promise<string> {
     r.onerror = () => reject(new Error('FileReader error'));
     r.readAsDataURL(blob);
   });
+}
+
+async function renderCroppedDataUrl(blob: Blob, card: Card): Promise<string> {
+  if (!card.crop || isFullCrop(card.crop)) {
+    return blobToDataUrl(blob);
+  }
+  try {
+    const img = await decodeImageElement(blob);
+    const sx = Math.round(card.crop.x * img.naturalWidth);
+    const sy = Math.round(card.crop.y * img.naturalHeight);
+    const sw = Math.max(1, Math.round(card.crop.w * img.naturalWidth));
+    const sh = Math.max(1, Math.round(card.crop.h * img.naturalHeight));
+    const maxEdge = 1280;
+    const scale = Math.min(1, maxEdge / Math.max(sw, sh));
+    const dw = Math.max(1, Math.round(sw * scale));
+    const dh = Math.max(1, Math.round(sh * scale));
+    const canvas = document.createElement('canvas');
+    canvas.width = dw;
+    canvas.height = dh;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return blobToDataUrl(blob);
+    ctx.drawImage(img, sx, sy, sw, sh, 0, 0, dw, dh);
+    const mime = card.cutout || blob.type === 'image/png' ? 'image/png' : 'image/jpeg';
+    const dataUrl = canvas.toDataURL(mime, 0.9);
+    canvas.width = 0;
+    canvas.height = 0;
+    return dataUrl;
+  } catch {
+    return blobToDataUrl(blob);
+  }
 }
 
 function escapeHtml(s: string): string {
@@ -48,9 +80,10 @@ export async function exportClientInteractiveHtml(
   const thumbMap: Record<string, string> = {};
   for (const c of nonFrameCards) {
     if (c.kind === 'image' && c.assetId) {
-      const blob = await getAssetBlob(c.assetId, true);
+      const hasCrop = Boolean(c.crop && !isFullCrop(c.crop));
+      const blob = await getAssetBlob(c.assetId, !hasCrop);
       if (blob) {
-        thumbMap[c.id] = await blobToDataUrl(blob);
+        thumbMap[c.id] = await renderCroppedDataUrl(blob, c);
         continue;
       }
     }

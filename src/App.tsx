@@ -100,7 +100,14 @@ import { commitImportedBackup, parseAndValidateBackupFile } from './storage/back
 import { decodeImageElement } from './storage/assets';
 import { ProjectConflictError } from './storage/projectWrites';
 import { useProjectPersistence } from './storage/useProjectPersistence';
-import { BoardViewport } from './board/BoardViewport';
+import { BoardViewport, type ActiveCropSession } from './board/BoardViewport';
+import {
+  computeCroppedCardRect,
+  computeFullImageFrame,
+  FULL_CROP,
+  isFullCrop,
+  type CropRect,
+} from './domain/cropGeometry';
 import { CanvasContextMenu, type ContextMenuState } from './board/CanvasContextMenu';
 import { RadialWheelMenu, type RadialMenuState } from './board/RadialWheelMenu';
 import { SelectionOverlay } from './board/SelectionOverlay';
@@ -194,7 +201,8 @@ export const App: React.FC = () => {
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [inspectorHiddenForCard, setInspectorHiddenForCard] = useState<string | null>(null);
   const [editingCardId, setEditingCardId] = useState<string | null>(null);
-  const [croppingCardId, setCroppingCardId] = useState<string | null>(null);
+  const [cropSession, setCropSession] = useState<ActiveCropSession | null>(null);
+  const croppingCardId = cropSession?.cardId ?? null;
   const [cuttingOutCardId, setCuttingOutCardId] = useState<string | null>(null);
   const [connectMode, setConnectMode] = useState(false);
   const [connectSourceId, setConnectSourceId] = useState<string | null>(null);
@@ -1876,6 +1884,102 @@ export const App: React.FC = () => {
     [handleChangeCard]
   );
 
+  const handleCommitCrop = useCallback(() => {
+    if (!cropSession || !activeProject) {
+      setCropSession(null);
+      return;
+    }
+    const { cardId, fullFrame, draftCrop } = cropSession;
+    if (isFullCrop(draftCrop)) {
+      handleChangeCard(
+        cardId,
+        {
+          x: Math.round(fullFrame.x),
+          y: Math.round(fullFrame.y),
+          w: Math.max(48, Math.round(fullFrame.w)),
+          h: Math.max(48, Math.round(fullFrame.h)),
+          crop: undefined,
+        },
+        true
+      );
+    } else {
+      const nextRect = computeCroppedCardRect(fullFrame, draftCrop);
+      handleChangeCard(
+        cardId,
+        {
+          x: nextRect.x,
+          y: nextRect.y,
+          w: nextRect.w,
+          h: nextRect.h,
+          crop: draftCrop,
+        },
+        true
+      );
+    }
+    setCropSession(null);
+  }, [activeProject, cropSession, handleChangeCard]);
+
+  const handleCancelCrop = useCallback(() => {
+    setCropSession(null);
+  }, []);
+
+  const handleToggleCrop = useCallback(
+    (cardId: string) => {
+      if (cropSession?.cardId === cardId) {
+        handleCommitCrop();
+        return;
+      }
+      if (!activeProject) return;
+      const target = activeProject.cards.find((it) => it.id === cardId);
+      if (!target || target.kind !== 'image' || !target.assetId) return;
+      const fullFrame = computeFullImageFrame(
+        { x: target.x, y: target.y, w: target.w, h: target.h },
+        target.crop
+      );
+      setContextMenu(null);
+      setRadialMenu(null);
+      setSelectedIds([cardId]);
+      setCropSession({
+        cardId,
+        fullFrame,
+        draftCrop: target.crop ? { ...target.crop } : { ...FULL_CROP },
+      });
+    },
+    [activeProject, cropSession?.cardId, handleCommitCrop]
+  );
+
+  const handleChangeDraftCrop = useCallback((nextCrop: CropRect) => {
+    setCropSession((prev) => (prev ? { ...prev, draftCrop: nextCrop } : null));
+  }, []);
+
+  const handleResetCrop = useCallback(
+    (cardId: string) => {
+      if (cropSession?.cardId === cardId) {
+        setCropSession((prev) => (prev ? { ...prev, draftCrop: { ...FULL_CROP } } : null));
+        return;
+      }
+      if (!activeProject) return;
+      const target = activeProject.cards.find((it) => it.id === cardId);
+      if (!target || !target.crop) return;
+      const fullFrame = computeFullImageFrame(
+        { x: target.x, y: target.y, w: target.w, h: target.h },
+        target.crop
+      );
+      handleChangeCard(
+        cardId,
+        {
+          x: Math.round(fullFrame.x),
+          y: Math.round(fullFrame.y),
+          w: Math.max(48, Math.round(fullFrame.w)),
+          h: Math.max(48, Math.round(fullFrame.h)),
+          crop: undefined,
+        },
+        true
+      );
+    },
+    [activeProject, cropSession?.cardId, handleChangeCard]
+  );
+
   // Z-Order & Alignment (steps cleanly past the nearest overlapping card so every keypress gives instant visual feedback)
   const handleStepZ = useCallback(
     (dir: 'forward' | 'backward') => {
@@ -2196,6 +2300,9 @@ export const App: React.FC = () => {
     navigationMode: 'auto',
     onViewChange: handleViewChange,
     onSelectChange: (ids) => {
+      if (cropSession && !ids.includes(cropSession.cardId)) {
+        handleCommitCrop();
+      }
       setInspectorHiddenForCard(null);
       setSelectedIds(ids);
       if (editingCardId && !ids.includes(editingCardId)) setEditingCardId(null);
@@ -2243,7 +2350,7 @@ export const App: React.FC = () => {
           return;
         }
         if (croppingCardId) {
-          setCroppingCardId(null);
+          handleCancelCrop();
           return;
         }
         if (editingCardId) {
@@ -2260,7 +2367,13 @@ export const App: React.FC = () => {
         return;
       }
 
-      if (presentMode || editingCardId || isTextInputFocused(e.target)) return;
+      if (e.key === 'Enter' && croppingCardId && !isTextInputFocused(e.target)) {
+        e.preventDefault();
+        handleCommitCrop();
+        return;
+      }
+
+      if (presentMode || editingCardId || croppingCardId || isTextInputFocused(e.target)) return;
 
       const mod = e.ctrlKey || e.metaKey;
 
@@ -2591,7 +2704,9 @@ export const App: React.FC = () => {
     dict.importedSvgVector,
     editingCardId,
     exitPresentMode,
+    handleCancelCrop,
     handleChangeAppearance,
+    handleCommitCrop,
     handleCopyImageForApps,
     handleDeleteIdsToTrash,
     handleDuplicateIds,
@@ -2788,7 +2903,7 @@ export const App: React.FC = () => {
         view={activeProject.view}
         selectedIds={selectedIds}
         editingCardId={editingCardId}
-        croppingCardId={croppingCardId}
+        cropSession={cropSession}
         highlightedCardId={highlightedCardId}
         dimmedCardIds={dimmedCardIds}
         connectMode={connectMode}
@@ -2800,6 +2915,9 @@ export const App: React.FC = () => {
         draft={interactions.draft}
         dict={dict}
         onPointerDown={(e) => {
+          if (cropSession && e.button === 0) {
+            handleCommitCrop();
+          }
           if (
             radialMenuEnabled &&
             e.button === 2 &&
@@ -2927,14 +3045,9 @@ export const App: React.FC = () => {
         }}
         onResizePointerDown={interactions.handleResizePointerDown}
         onUpdateCardText={handleUpdateNoteText}
-        onChangeCrop={(cardId, crop) => handleChangeCard(cardId, { crop }, false)}
-        onFinishCrop={() => {
-          if (croppingCardId) {
-            const c = activeProject.cards.find((it) => it.id === croppingCardId);
-            if (c) handleChangeCard(c.id, { crop: c.crop }, true);
-          }
-          setCroppingCardId(null);
-        }}
+        onChangeCrop={handleChangeDraftCrop}
+        onFinishCrop={handleCommitCrop}
+        onCancelCrop={handleCancelCrop}
         onFinishEdit={() => setEditingCardId(null)}
         onRemoveConnector={handleRemoveConnector}
         onOpenLightbox={(c) => setLightboxCardId(c.id)}
@@ -3002,6 +3115,13 @@ export const App: React.FC = () => {
                 duplicateIds={duplicateIds}
                 onChangeFilter={setBoardFilter}
                 onSelectResult={handleSearchSelect}
+                onOpenDropdown={() => {
+                  setInboxOpen(false);
+                  setSettingsOpen(false);
+                  setMoreMenuOpen(false);
+                  setContextMenu(null);
+                  setRadialMenu(null);
+                }}
               />
               <InboxPanel
                 open={inboxOpen}
@@ -3013,8 +3133,11 @@ export const App: React.FC = () => {
                   setInboxOpen((v) => {
                     const next = !v;
                     if (next) {
+                      (document.activeElement as HTMLElement | null)?.blur?.();
                       setSettingsOpen(false);
                       setMoreMenuOpen(false);
+                      setContextMenu(null);
+                      setRadialMenu(null);
                       lastPreviewFitKeyRef.current = null;
                       setArrangePreviewCards(null);
                       setArrangeOpen(false);
@@ -3227,15 +3350,8 @@ export const App: React.FC = () => {
               isCuttingOut={cuttingOutCardId === singleSelectedCard.id}
               onClose={() => setSelectedIds([])}
               onChangeCard={handleChangeCard}
-              onToggleCrop={(id) => {
-                setCroppingCardId((prev) => {
-                  if (prev === id) return null;
-                  if (!singleSelectedCard.crop) {
-                    handleChangeCard(id, { crop: { x: 0.08, y: 0.08, w: 0.84, h: 0.84 } }, true);
-                  }
-                  return id;
-                });
-              }}
+              onToggleCrop={handleToggleCrop}
+              onResetCrop={handleResetCrop}
               onRunAiCutout={(c) => void handleRunAiCutout(c)}
               onRestoreOriginalBg={handleRestoreOriginalBg}
               onCopyImageForApps={(c) => void handleCopyImageForApps(c)}
@@ -3564,16 +3680,7 @@ export const App: React.FC = () => {
             replacePickerRef.current?.click();
           }}
           onExtractPalette={(c) => void handleExtractPalette(c)}
-          onToggleCrop={(id) => {
-            setCroppingCardId((prev) => {
-              if (prev === id) return null;
-              const target = activeProject.cards.find((it) => it.id === id);
-              if (target && !target.crop) {
-                handleChangeCard(id, { crop: { x: 0.08, y: 0.08, w: 0.84, h: 0.84 } }, true);
-              }
-              return id;
-            });
-          }}
+          onToggleCrop={handleToggleCrop}
           onRunAiCutout={(c) => void handleRunAiCutout(c)}
           onCopyImageForApps={(c) => void handleCopyImageForApps(c)}
           onConnectSelected={handleConnectSelected}
@@ -3643,16 +3750,7 @@ export const App: React.FC = () => {
           onOpenLightbox={(c) => setLightboxCardId(c.id)}
           onRunAiCutout={(c) => void handleRunAiCutout(c)}
           onRestoreOriginalBg={handleRestoreOriginalBg}
-          onToggleCrop={(id) => {
-            setCroppingCardId((prev) => {
-              if (prev === id) return null;
-              const target = activeProject.cards.find((it) => it.id === id);
-              if (target && !target.crop) {
-                handleChangeCard(id, { crop: { x: 0.08, y: 0.08, w: 0.84, h: 0.84 } }, true);
-              }
-              return id;
-            });
-          }}
+          onToggleCrop={handleToggleCrop}
           onExtractPalette={(c) => void handleExtractPalette(c)}
           onStartConnectFrom={(cardId) => {
             setConnectMode(true);

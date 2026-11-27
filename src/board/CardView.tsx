@@ -11,8 +11,18 @@ import {
   Lock,
   Maximize2,
   RefreshCw,
+  RotateCcw,
+  X,
 } from 'lucide-react';
 import type { Card } from '../domain/types';
+import {
+  applyCropHandleDrag,
+  fitCropToAspectPreset,
+  FULL_CROP,
+  isFullCrop,
+  type CropHandle,
+  type CropRect,
+} from '../domain/cropGeometry';
 import { extractHostname, getContrastTextColor } from '../domain/validate';
 import { getCategoryLabel, type I18nDict } from '../i18n';
 import { resolveAssetUrl } from '../storage/workspaceRepository';
@@ -23,10 +33,12 @@ interface CardViewProps {
   displayY: number;
   displayW: number;
   displayH: number;
+  zoom: number;
   selected: boolean;
   singleSelected: boolean;
   isEditing: boolean;
   isCropping: boolean;
+  draftCrop: CropRect | null;
   isHighlighted: boolean;
   isDimmed: boolean;
   isMoving: boolean;
@@ -38,8 +50,9 @@ interface CardViewProps {
   onContextMenu: (e: React.MouseEvent, card: Card) => void;
   onResizePointerDown: (e: React.PointerEvent, card: Card) => void;
   onUpdateCardText: (cardId: string, text: string) => void;
-  onChangeCrop: (cardId: string, crop: { x: number; y: number; w: number; h: number }) => void;
+  onChangeCrop: (crop: CropRect) => void;
   onFinishCrop: () => void;
+  onCancelCrop: () => void;
   onFinishEdit: () => void;
   onOpenLightbox: (card: Card) => void;
   onOpenFileCard: (card: Card) => void;
@@ -60,10 +73,12 @@ export const CardView: React.FC<CardViewProps> = React.memo(
     displayY,
     displayW,
     displayH,
+    zoom,
     selected,
     singleSelected,
     isEditing,
     isCropping,
+    draftCrop,
     isHighlighted,
     isDimmed,
     isMoving,
@@ -77,6 +92,7 @@ export const CardView: React.FC<CardViewProps> = React.memo(
     onUpdateCardText,
     onChangeCrop,
     onFinishCrop,
+    onCancelCrop,
     onFinishEdit,
     onOpenLightbox,
     onOpenFileCard,
@@ -89,6 +105,11 @@ export const CardView: React.FC<CardViewProps> = React.memo(
     );
     const [imgFailed, setImgFailed] = useState(false);
     const [copiedHex, setCopiedHex] = useState(false);
+    const [cropAspectPreset, setCropAspectPreset] = useState<number | null>(null);
+
+    useEffect(() => {
+      if (!isCropping) setCropAspectPreset(null);
+    }, [isCropping]);
 
     useEffect(() => {
       let alive = true;
@@ -165,6 +186,7 @@ export const CardView: React.FC<CardViewProps> = React.memo(
       `board-card--${card.kind}`,
       selected && !presentMode ? 'is-selected' : '',
       isMoving ? 'is-moving' : '',
+      isCropping ? 'is-cropping' : '',
       isArranging ? 'is-arranging' : '',
       card.locked ? 'is-locked' : '',
       card.framed && !card.cutout ? 'is-framed' : '',
@@ -248,14 +270,20 @@ export const CardView: React.FC<CardViewProps> = React.memo(
                   referrerPolicy="no-referrer"
                   onError={() => setImgFailed(true)}
                   style={
-                    !isCropping && card.crop
+                    !isCropping && card.crop && !isFullCrop(card.crop)
                       ? {
+                          position: 'absolute',
+                          left: `${(-card.crop.x / card.crop.w) * 100}%`,
+                          top: `${(-card.crop.y / card.crop.h) * 100}%`,
                           width: `${(1 / card.crop.w) * 100}%`,
                           height: `${(1 / card.crop.h) * 100}%`,
                           maxWidth: 'none',
-                          transform: `translate(${-card.crop.x * 100}%, ${-card.crop.y * 100}%)`,
+                          maxHeight: 'none',
+                          objectFit: 'fill',
                         }
-                      : undefined
+                      : isCropping
+                        ? { width: '100%', height: '100%', objectFit: 'fill' }
+                        : undefined
                   }
                 />
               </div>
@@ -289,50 +317,52 @@ export const CardView: React.FC<CardViewProps> = React.memo(
 
             {!presentMode && (
               <>
-                <div className="image-card-overlay-top">
-                  <span className="card-cat-chip">{getCategoryLabel(dict, card.category)}</span>
-                  <div className="image-card-quick-actions">
-                    {imgUrl && !imgFailed && (
-                      <>
-                        <span
-                          className="icon-chip-btn drag-out-chip"
-                          draggable
-                          title={dict.dragOutHint}
-                          aria-label={dict.dragOutHint}
-                          onPointerDown={(e) => e.stopPropagation()}
-                          onDragStart={handleDragOutStart}
-                        >
-                          <GripHorizontal size={13} />
-                        </span>
+                {!isCropping && (
+                  <div className="image-card-overlay-top">
+                    <span className="card-cat-chip">{getCategoryLabel(dict, card.category)}</span>
+                    <div className="image-card-quick-actions">
+                      {imgUrl && !imgFailed && (
+                        <>
+                          <span
+                            className="icon-chip-btn drag-out-chip"
+                            draggable
+                            title={dict.dragOutHint}
+                            aria-label={dict.dragOutHint}
+                            onPointerDown={(e) => e.stopPropagation()}
+                            onDragStart={handleDragOutStart}
+                          >
+                            <GripHorizontal size={13} />
+                          </span>
+                          <button
+                            type="button"
+                            className="icon-chip-btn"
+                            title={dict.viewLarge}
+                            aria-label={dict.viewLarge}
+                            onPointerDown={(e) => e.stopPropagation()}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              onOpenLightbox(card);
+                            }}
+                          >
+                            <Maximize2 size={13} />
+                          </button>
+                        </>
+                      )}
+                      {card.source?.pageUrl && (
                         <button
                           type="button"
                           className="icon-chip-btn"
-                          title={dict.viewLarge}
-                          aria-label={dict.viewLarge}
+                          title={dict.openSource}
+                          aria-label={dict.openSource}
                           onPointerDown={(e) => e.stopPropagation()}
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            onOpenLightbox(card);
-                          }}
+                          onClick={(e) => openUrlSafe(e, card.source?.pageUrl)}
                         >
-                          <Maximize2 size={13} />
+                          <ExternalLink size={13} />
                         </button>
-                      </>
-                    )}
-                    {card.source?.pageUrl && (
-                      <button
-                        type="button"
-                        className="icon-chip-btn"
-                        title={dict.openSource}
-                        aria-label={dict.openSource}
-                        onPointerDown={(e) => e.stopPropagation()}
-                        onClick={(e) => openUrlSafe(e, card.source?.pageUrl)}
-                      >
-                        <ExternalLink size={13} />
-                      </button>
-                    )}
+                      )}
+                    </div>
                   </div>
-                </div>
+                )}
                 {card.title && !isCropping && (
                   <div className="image-card-caption-bar">
                     <span className="truncate">{card.title}</span>
@@ -340,89 +370,217 @@ export const CardView: React.FC<CardViewProps> = React.memo(
                 )}
 
                 {isCropping && (
-                  <div
-                    className="crop-overlay"
-                    onPointerDown={(e) => e.stopPropagation()}
-                    onDoubleClick={(e) => {
-                      e.stopPropagation();
-                      onFinishCrop();
-                    }}
-                  >
-                    {(() => {
-                      const c = card.crop ?? { x: 0.1, y: 0.1, w: 0.8, h: 0.8 };
-                      const startCropDrag = (
-                        ev: React.PointerEvent,
-                        mode: 'box' | 'nw' | 'se'
-                      ) => {
-                        ev.stopPropagation();
-                        ev.preventDefault();
-                        const startX = ev.clientX;
-                        const startY = ev.clientY;
-                        const init = { ...c };
-                        const onMove = (me: PointerEvent) => {
-                          const dx = (me.clientX - startX) / Math.max(40, displayW);
-                          const dy = (me.clientY - startY) / Math.max(40, displayH);
-                          if (mode === 'box') {
-                            const nx = Math.max(0, Math.min(1 - init.w, init.x + dx));
-                            const ny = Math.max(0, Math.min(1 - init.h, init.y + dy));
-                            onChangeCrop(card.id, { x: nx, y: ny, w: init.w, h: init.h });
-                          } else if (mode === 'nw') {
-                            const nx = Math.max(0, Math.min(init.x + init.w - 0.15, init.x + dx));
-                            const ny = Math.max(0, Math.min(init.y + init.h - 0.15, init.y + dy));
-                            onChangeCrop(card.id, {
-                              x: nx,
-                              y: ny,
-                              w: init.w - (nx - init.x),
-                              h: init.h - (ny - init.y),
-                            });
-                          } else {
-                            const nw = Math.max(0.15, Math.min(1 - init.x, init.w + dx));
-                            const nh = Math.max(0.15, Math.min(1 - init.y, init.h + dy));
-                            onChangeCrop(card.id, { x: init.x, y: init.y, w: nw, h: nh });
-                          }
-                        };
-                        const onUp = () => {
-                          window.removeEventListener('pointermove', onMove);
-                          window.removeEventListener('pointerup', onUp);
-                        };
-                        window.addEventListener('pointermove', onMove);
-                        window.addEventListener('pointerup', onUp);
-                      };
+                  <>
+                    <div
+                      className="crop-overlay"
+                      onPointerDown={(e) => e.stopPropagation()}
+                      onDoubleClick={(e) => {
+                        e.stopPropagation();
+                        onFinishCrop();
+                      }}
+                    >
+                      {(() => {
+                        const rawCrop = draftCrop ?? card.crop ?? FULL_CROP;
+                        // Map horizontally if card is flipped so handles track cursor visually 1:1
+                        const visualCrop: CropRect = card.flipH
+                          ? { x: 1 - rawCrop.x - rawCrop.w, y: rawCrop.y, w: rawCrop.w, h: rawCrop.h }
+                          : rawCrop;
+                        const toCardCrop = (vc: CropRect): CropRect =>
+                          card.flipH ? { x: 1 - vc.x - vc.w, y: vc.y, w: vc.w, h: vc.h } : vc;
 
-                      return (
-                        <div
-                          className="crop-frame-box"
-                          style={{
-                            left: `${c.x * 100}%`,
-                            top: `${c.y * 100}%`,
-                            width: `${c.w * 100}%`,
-                            height: `${c.h * 100}%`,
-                          }}
-                          onPointerDown={(e) => startCropDrag(e, 'box')}
-                        >
-                          <span
-                            className="crop-handle crop-handle--nw"
-                            onPointerDown={(e) => startCropDrag(e, 'nw')}
-                          />
-                          <span
-                            className="crop-handle crop-handle--se"
-                            onPointerDown={(e) => startCropDrag(e, 'se')}
-                          />
-                          <button
-                            type="button"
-                            className="crop-done-btn"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              onFinishCrop();
-                            }}
-                          >
-                            <Check size={12} />
-                            <span>{dict.cropDone}</span>
-                          </button>
-                        </div>
-                      );
-                    })()}
-                  </div>
+                        const invScale = 1 / Math.max(0.45, Math.min(2.2, zoom || 1));
+                        const startCropDrag = (ev: React.PointerEvent, handle: CropHandle) => {
+                          ev.stopPropagation();
+                          ev.preventDefault();
+                          const startX = ev.clientX;
+                          const startY = ev.clientY;
+                          const initVis = { ...visualCrop };
+                          const initAspect =
+                            (initVis.w * displayW) / Math.max(1, initVis.h * displayH);
+                          const effScale = Math.max(0.1, zoom || 1);
+
+                          const onMove = (me: PointerEvent) => {
+                            const dxNorm = (me.clientX - startX) / Math.max(20, displayW * effScale);
+                            const dyNorm = (me.clientY - startY) / Math.max(20, displayH * effScale);
+                            const lockAspect =
+                              cropAspectPreset ?? (me.shiftKey ? initAspect : null);
+                            const nextVis = applyCropHandleDrag(
+                              initVis,
+                              handle,
+                              dxNorm,
+                              dyNorm,
+                              displayW,
+                              displayH,
+                              lockAspect
+                            );
+                            onChangeCrop(toCardCrop(nextVis));
+                          };
+                          const onUp = () => {
+                            window.removeEventListener('pointermove', onMove);
+                            window.removeEventListener('pointerup', onUp);
+                          };
+                          window.addEventListener('pointermove', onMove);
+                          window.addEventListener('pointerup', onUp);
+                        };
+
+                        return (
+                          <>
+                            {/* Clipped outer dim mask — dims ONLY discarded regions of the photo */}
+                            <div className="crop-dim-mask" aria-hidden="true">
+                              <div
+                                className="crop-dim-cutout"
+                                style={{
+                                  left: `${visualCrop.x * 100}%`,
+                                  top: `${visualCrop.y * 100}%`,
+                                  width: `${visualCrop.w * 100}%`,
+                                  height: `${visualCrop.h * 100}%`,
+                                }}
+                              />
+                            </div>
+
+                            <div
+                              className="crop-frame-box"
+                              style={{
+                                left: `${visualCrop.x * 100}%`,
+                                top: `${visualCrop.y * 100}%`,
+                                width: `${visualCrop.w * 100}%`,
+                                height: `${visualCrop.h * 100}%`,
+                                ['--crop-inv-zoom' as string]: invScale,
+                              }}
+                              onPointerDown={(e) => startCropDrag(e, 'box')}
+                            >
+                              {/* Subtle 3x3 Rule-of-Thirds composition guides */}
+                              <div className="crop-thirds-grid" aria-hidden="true">
+                                <span className="crop-third-v crop-third-v--1" />
+                                <span className="crop-third-v crop-third-v--2" />
+                                <span className="crop-third-h crop-third-h--1" />
+                                <span className="crop-third-h crop-third-h--2" />
+                              </div>
+
+                              {/* 4 Edge Handles (N / S / E / W) */}
+                              <span
+                                className="crop-edge crop-edge--n"
+                                data-crop-handle="n"
+                                onPointerDown={(e) => startCropDrag(e, 'n')}
+                              />
+                              <span
+                                className="crop-edge crop-edge--s"
+                                data-crop-handle="s"
+                                onPointerDown={(e) => startCropDrag(e, 's')}
+                              />
+                              <span
+                                className="crop-edge crop-edge--w"
+                                data-crop-handle="w"
+                                onPointerDown={(e) => startCropDrag(e, 'w')}
+                              />
+                              <span
+                                className="crop-edge crop-edge--e"
+                                data-crop-handle="e"
+                                onPointerDown={(e) => startCropDrag(e, 'e')}
+                              />
+
+                              {/* 4 Corner L-Bracket Handles (NW / NE / SW / SE) */}
+                              <span
+                                className="crop-corner crop-corner--nw"
+                                data-crop-handle="nw"
+                                onPointerDown={(e) => startCropDrag(e, 'nw')}
+                              />
+                              <span
+                                className="crop-corner crop-corner--ne"
+                                data-crop-handle="ne"
+                                onPointerDown={(e) => startCropDrag(e, 'ne')}
+                              />
+                              <span
+                                className="crop-corner crop-corner--sw"
+                                data-crop-handle="sw"
+                                onPointerDown={(e) => startCropDrag(e, 'sw')}
+                              />
+                              <span
+                                className="crop-corner crop-corner--se"
+                                data-crop-handle="se"
+                                onPointerDown={(e) => startCropDrag(e, 'se')}
+                              />
+                            </div>
+                          </>
+                        );
+                      })()}
+                    </div>
+
+                    {/* Floating Figma/Photoshop Glass Crop Action Bar below frame */}
+                    <div
+                      className="crop-floating-bar"
+                      style={{
+                        transform: `translateX(-50%) scale(${1 / Math.max(0.55, Math.min(2, zoom || 1))})`,
+                      }}
+                      onPointerDown={(e) => e.stopPropagation()}
+                    >
+                      <div className="crop-ratio-group">
+                        {[
+                          { label: dict.cropFree, ratio: null },
+                          { label: '1:1', ratio: 1 },
+                          { label: '4:3', ratio: 4 / 3 },
+                          { label: '16:9', ratio: 16 / 9 },
+                          { label: '3:4', ratio: 3 / 4 },
+                        ].map((preset) => {
+                          const isActive = cropAspectPreset === preset.ratio;
+                          return (
+                            <button
+                              key={preset.label}
+                              type="button"
+                              className={`crop-bar-chip ${isActive ? 'is-active' : ''}`}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setCropAspectPreset(preset.ratio);
+                                if (preset.ratio !== null) {
+                                  const cur = draftCrop ?? card.crop ?? FULL_CROP;
+                                  onChangeCrop(
+                                    fitCropToAspectPreset(cur, displayW, displayH, preset.ratio)
+                                  );
+                                }
+                              }}
+                            >
+                              {preset.label}
+                            </button>
+                          );
+                        })}
+                      </div>
+                      <span className="crop-bar-sep" aria-hidden="true" />
+                      <button
+                        type="button"
+                        className="crop-bar-btn"
+                        title={dict.cropReset}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setCropAspectPreset(null);
+                          onChangeCrop(FULL_CROP);
+                        }}
+                      >
+                        <RotateCcw size={12} />
+                      </button>
+                      <button
+                        type="button"
+                        className="crop-bar-btn"
+                        title={dict.cancel}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onCancelCrop();
+                        }}
+                      >
+                        <X size={13} />
+                      </button>
+                      <button
+                        type="button"
+                        className="crop-bar-btn crop-bar-btn--done"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onFinishCrop();
+                        }}
+                      >
+                        <Check size={12} />
+                        <span>{dict.cropDone}</span>
+                      </button>
+                    </div>
+                  </>
                 )}
               </>
             )}
@@ -584,7 +742,7 @@ export const CardView: React.FC<CardViewProps> = React.memo(
           </div>
         )}
 
-        {singleSelected && !card.locked && !presentMode && !isEditing && !isMoving && (
+        {singleSelected && !card.locked && !presentMode && !isEditing && !isMoving && !isCropping && (
           <div
             className="card-resize-handle"
             role="presentation"
